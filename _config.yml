@@ -1,0 +1,39 @@
+# Site settings
+title: Gunjan Lakhlani
+description: >-
+  Physicist, thinker, and lifelong learner. From the streets of Mumbai to the
+  frontiers of theoretical physics — exploring the universe one equation at a time.
+url: "https://gunjanlakhlani.github.io"
+baseurl: ""
+
+# Author
+author:
+  name: Gunjan Lakhlani
+
+# Build settings
+markdown: kramdown
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Permalink structure
+permalink: /blog/:year/:month/:day/:title/
+
+# Sass
+sass:
+  style: compressed
+  sass_dir: _sass
+
+# Plugins (supported by GitHub Pages)
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor

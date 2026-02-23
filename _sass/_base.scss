@@ -1,0 +1,142 @@
+// =============================================
+// Base Styles & Reset
+// =============================================
+
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: $font-body;
+    font-size: $font-size-base;
+    line-height: $line-height-normal;
+    color: $text-primary;
+    background-color: $bg-primary;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+a {
+    color: $accent-2;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover {
+        color: lighten($accent-2, 10%);
+    }
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: $text-primary;
+    font-weight: $font-weight-bold;
+    line-height: $line-height-tight;
+    margin-bottom: $space-md;
+}
+
+h1 {
+    font-size: $font-size-4xl;
+}
+
+h2 {
+    font-size: $font-size-2xl;
+}
+
+h3 {
+    font-size: $font-size-xl;
+}
+
+h4 {
+    font-size: $font-size-lg;
+}
+
+p {
+    margin-bottom: $space-lg;
+    color: $text-secondary;
+    line-height: $line-height-relaxed;
+}
+
+code {
+    font-family: $font-mono;
+    font-size: 0.9em;
+    background: rgba($accent-1, 0.1);
+    color: $accent-2;
+    padding: 0.15em 0.4em;
+    border-radius: $radius-sm;
+}
+
+pre {
+    background: $bg-secondary;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-md;
+    padding: $space-lg;
+    overflow-x: auto;
+    margin-bottom: $space-xl;
+
+    code {
+        background: none;
+        color: $text-primary;
+        padding: 0;
+        font-size: $font-size-sm;
+        line-height: $line-height-relaxed;
+    }
+}
+
+blockquote {
+    border-left: 3px solid $accent-1;
+    padding: $space-md $space-lg;
+    margin: $space-xl 0;
+    background: $bg-card;
+    border-radius: 0 $radius-md $radius-md 0;
+
+    p {
+        color: $text-secondary;
+        margin-bottom: 0;
+        font-style: italic;
+    }
+}
+
+hr {
+    border: none;
+    height: 1px;
+    background: $border-subtle;
+    margin: $space-3xl 0;
+}
+
+ul,
+ol {
+    padding-left: $space-xl;
+    margin-bottom: $space-lg;
+    color: $text-secondary;
+
+    li {
+        margin-bottom: $space-sm;
+        line-height: $line-height-relaxed;
+    }
+}
+
+::selection {
+    background: rgba($accent-1, 0.3);
+    color: $text-primary;
+}

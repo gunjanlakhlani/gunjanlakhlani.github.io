@@ -1,0 +1,110 @@
+---
+layout: default
+---
+
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero__content">
+        <p class="hero__greeting">Hello, I'm</p>
+        <h1 class="hero__name">Gunjan Lakhlani</h1>
+        <p class="hero__tagline">Physicist turned explorer of ideas — from quantum fields to code, always chasing the
+            elegant solution.</p>
+        <a href="{{ '/blog' | relative_url }}" class="hero__cta">
+            Read my writing
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+        </a>
+    </div>
+</section>
+
+<!-- About Section -->
+<section class="about">
+    <div class="container">
+        <div class="about__grid">
+            <div>
+                <p class="about__label">About</p>
+                <p class="about__text">
+                    Born in <strong>Ahmedabad</strong> and raised in <strong>Mumbai</strong>, I completed my B.Sc. in
+                    Physics from
+                    <strong>St. Xavier's College, Mumbai</strong> in 2012. Driven by a deep curiosity about the
+                    fundamental nature
+                    of reality, I moved to <strong>Perimeter Institute for Theoretical Physics</strong> in Waterloo,
+                    Canada for my
+                    Master's in Theoretical Physics.
+                </p>
+                <p class="about__text">
+                    Today, I channel that same analytical rigour into technology and software — finding beauty in
+                    well-crafted systems whether they describe the universe or compile into machine code.
+                </p>
+            </div>
+            <div class="about__highlights">
+                <div class="highlight-card">
+                    <div class="highlight-card__icon">🎓</div>
+                    <div class="highlight-card__content">
+                        <h4>St. Xavier's College, Mumbai</h4>
+                        <p>B.Sc. Physics — Class of 2012</p>
+                    </div>
+                </div>
+                <div class="highlight-card">
+                    <div class="highlight-card__icon">🔬</div>
+                    <div class="highlight-card__content">
+                        <h4>Perimeter Institute</h4>
+                        <p>M.Sc. Theoretical Physics — Waterloo, Canada</p>
+                    </div>
+                </div>
+                <div class="highlight-card">
+                    <div class="highlight-card__icon">💻</div>
+                    <div class="highlight-card__content">
+                        <h4>Technology & Code</h4>
+                        <p>Building systems with the precision of physics</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Latest Posts -->
+{% if site.posts.size > 0 %}
+<section class="latest-posts">
+    <div class="container">
+        <div class="section-header">
+            <h2 class="section-header__title">Latest Writing</h2>
+            <a href="{{ '/blog' | relative_url }}" class="section-header__link">
+                View all posts
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </a>
+        </div>
+        <div class="posts-grid">
+            {% for post in site.posts limit:3 %}
+            <a href="{{ post.url | relative_url }}" class="post-card">
+                <div class="post-card__meta">
+                    <span class="post-card__date">{{ post.date | date: "%b %d, %Y" }}</span>
+                    {% assign words = post.content | number_of_words %}
+                    {% assign reading_time = words | divided_by: 200 | plus: 1 %}
+                    <span class="post-card__reading-time">{{ reading_time }} min read</span>
+                </div>
+                <h3 class="post-card__title">{{ post.title }}</h3>
+                {% if post.excerpt %}
+                <p class="post-card__excerpt">{{ post.excerpt | strip_html | truncatewords: 30 }}</p>
+                {% endif %}
+                {% if post.tags.size > 0 %}
+                <div class="post-card__tags">
+                    {% for tag in post.tags %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}

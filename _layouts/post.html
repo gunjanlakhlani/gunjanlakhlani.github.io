@@ -1,0 +1,37 @@
+---
+layout: default
+---
+
+<article class="post">
+    <div class="container--narrow">
+        <header class="post__header">
+            <a href="{{ '/blog' | relative_url }}" class="post__back">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to all posts
+            </a>
+            <h1 class="post__title">{{ page.title }}</h1>
+            <div class="post__meta">
+                <time class="post__date" datetime="{{ page.date | date_to_xmlschema }}">
+                    {{ page.date | date: "%B %d, %Y" }}
+                </time>
+                {% assign words = content | number_of_words %}
+                {% assign reading_time = words | divided_by: 200 | plus: 1 %}
+                <span class="post__reading-time">{{ reading_time }} min read</span>
+                {% if page.tags.size > 0 %}
+                <div class="post__tags">
+                    {% for tag in page.tags %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </header>
+        <div class="post__content">
+            {{ content }}
+        </div>
+    </div>
+</article>
