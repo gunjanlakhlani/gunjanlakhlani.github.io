@@ -2,86 +2,57 @@
 layout: default
 ---
 
-<!-- Hero Section -->
+<!-- Hero — centered profile card -->
 <section class="hero">
-    <div class="hero__content">
-        <p class="hero__greeting">Hello, I'm</p>
+    <div class="hero__inner">
+        <img src="{{ '/assets/images/profile.png' | relative_url }}" alt="Gunjan Lakhlani" class="hero__photo">
         <h1 class="hero__name">Gunjan Lakhlani</h1>
-        <p class="hero__tagline">Physicist turned explorer of ideas — from quantum fields to code, always chasing the
-            elegant solution.</p>
-        <a href="{{ '/blog' | relative_url }}" class="hero__cta">
-            Read my writing
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-                <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
-        </a>
-    </div>
-</section>
+        <p class="hero__title">Physicist / Software Engineer</p>
+        <p class="hero__bio">
+            From Mumbai to Perimeter Institute — trained in theoretical physics,
+            now building elegant systems in code. Always chasing the deeper structure.
+        </p>
 
-<!-- About Section -->
-<section class="about">
-    <div class="container">
-        <div class="about__grid">
-            <div>
-                <p class="about__label">About</p>
-                <p class="about__text">
-                    Born in <strong>Ahmedabad</strong> and raised in <strong>Mumbai</strong>, I completed my B.Sc. in
-                    Physics from
-                    <strong>St. Xavier's College, Mumbai</strong> in 2012. Driven by a deep curiosity about the
-                    fundamental nature
-                    of reality, I moved to <strong>Perimeter Institute for Theoretical Physics</strong> in Waterloo,
-                    Canada for my
-                    Master's in Theoretical Physics.
-                </p>
-                <p class="about__text">
-                    Today, I channel that same analytical rigour into technology and software — finding beauty in
-                    well-crafted systems whether they describe the universe or compile into machine code.
-                </p>
-            </div>
-            <div class="about__highlights">
-                <div class="highlight-card">
-                    <div class="highlight-card__icon">🎓</div>
-                    <div class="highlight-card__content">
-                        <h4>St. Xavier's College, Mumbai</h4>
-                        <p>B.Sc. Physics — Class of 2012</p>
-                    </div>
-                </div>
-                <div class="highlight-card">
-                    <div class="highlight-card__icon">🔬</div>
-                    <div class="highlight-card__content">
-                        <h4>Perimeter Institute</h4>
-                        <p>M.Sc. Theoretical Physics — Waterloo, Canada</p>
-                    </div>
-                </div>
-                <div class="highlight-card">
-                    <div class="highlight-card__icon">💻</div>
-                    <div class="highlight-card__content">
-                        <h4>Technology & Code</h4>
-                        <p>Building systems with the precision of physics</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Latest Posts -->
-{% if site.posts.size > 0 %}
-<section class="latest-posts">
-    <div class="container">
-        <div class="section-header">
-            <h2 class="section-header__title">Latest Writing</h2>
-            <a href="{{ '/blog' | relative_url }}" class="section-header__link">
-                View all posts
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+        <div class="hero__links">
+            <a href="{{ '/blog' | relative_url }}" class="hero__link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="12 5 19 12 12 19"></polyline>
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
                 </svg>
+                Blog
+            </a>
+            <a href="https://github.com/gunjanlakhlani" target="_blank" rel="noopener" class="hero__link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                        d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22">
+                    </path>
+                </svg>
+                GitHub
+            </a>
+            <a href="https://linkedin.com/in/gunjanlakhlani" target="_blank" rel="noopener" class="hero__link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                    <rect x="2" y="9" width="4" height="12"></rect>
+                    <circle cx="4" cy="4" r="2"></circle>
+                </svg>
+                LinkedIn
+            </a>
+            <a href="https://scholar.google.com/" target="_blank" rel="noopener" class="hero__link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                Papers
             </a>
         </div>
+
+        {% if site.posts.size > 0 %}
+        <div class="hero__divider"></div>
+        <p class="hero__posts-label">Latest Writing</p>
         <div class="posts-grid">
             {% for post in site.posts limit:3 %}
             <a href="{{ post.url | relative_url }}" class="post-card">
@@ -92,9 +63,6 @@ layout: default
                     <span class="post-card__reading-time">{{ reading_time }} min read</span>
                 </div>
                 <h3 class="post-card__title">{{ post.title }}</h3>
-                {% if post.excerpt %}
-                <p class="post-card__excerpt">{{ post.excerpt | strip_html | truncatewords: 30 }}</p>
-                {% endif %}
                 {% if post.tags.size > 0 %}
                 <div class="post-card__tags">
                     {% for tag in post.tags %}
@@ -105,6 +73,6 @@ layout: default
             </a>
             {% endfor %}
         </div>
+        {% endif %}
     </div>
 </section>
-{% endif %}
