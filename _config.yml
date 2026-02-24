@@ -21,11 +21,6 @@ kramdown:
 # Permalink structure
 permalink: /blog/:year/:month/:day/:title/
 
-# Sass
-sass:
-  style: compressed
-  sass_dir: _sass
-
 # Plugins (supported by GitHub Pages)
 plugins:
   - jekyll-seo-tag
@@ -37,3 +32,6 @@ exclude:
   - Gemfile.lock
   - README.md
   - vendor
+  - _sass
+  - _preview
+  - assets/css/main.scss
