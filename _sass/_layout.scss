@@ -77,12 +77,39 @@
 }
 
 .hero__bio {
-    font-size: $fs-base;
+    font-size: $fs-sm;
     color: $text-secondary;
-    line-height: 1.7;
-    margin-bottom: $sp-2xl;
+    line-height: 1.75;
+    margin-bottom: $sp-md;
     opacity: 0;
     animation: fadeIn 0.6s ease 0.4s forwards;
+
+    &:last-of-type {
+        margin-bottom: $sp-2xl;
+    }
+}
+
+// Pull quote
+.hero__quote {
+    font-size: $fs-sm;
+    font-style: italic;
+    color: $text-muted;
+    border: none;
+    padding: 0;
+    margin: 0 0 $sp-lg;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.35s forwards;
+    background: none;
+
+    cite {
+        display: block;
+        font-style: normal;
+        font-family: $font-mono;
+        font-size: $fs-xs;
+        color: rgba($text-muted, 0.7);
+        margin-top: $sp-xs;
+        letter-spacing: 0.03em;
+    }
 }
 
 // Ghost buttons like the reference site
