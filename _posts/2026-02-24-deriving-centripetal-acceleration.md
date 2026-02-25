@@ -28,32 +28,80 @@ That's exactly what's happening with our ball on a string. Its speed stays the s
 
 Let's put the ball on a circular path of radius $r$, moving at constant speed $v$.
 
-<div style="text-align: center; margin: 2.5rem 0;">
-<svg width="320" height="320" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
-  <rect width="320" height="320" fill="none"/>
-  <circle cx="160" cy="160" r="110" fill="none" stroke="#4a5568" stroke-width="1.5" stroke-dasharray="6,4"/>
-  <circle cx="160" cy="160" r="4" fill="#718096"/>
-  <text x="168" y="165" fill="#718096" font-size="13" font-family="monospace">O (centre)</text>
-  <line x1="160" y1="160" x2="160" y2="50" stroke="#718096" stroke-width="1" stroke-dasharray="4,3"/>
-  <text x="166" y="108" fill="#718096" font-size="13" font-family="monospace">r</text>
-  <circle cx="160" cy="50" r="10" fill="#63b3ed" stroke="#4299e1" stroke-width="2"/>
-  <line x1="160" y1="50" x2="240" y2="50" stroke="#68d391" stroke-width="2.5" marker-end="url(#ag1)"/>
-  <text x="245" y="54" fill="#68d391" font-size="13" font-family="monospace" font-weight="bold">v</text>
-  <circle cx="270" cy="160" r="10" fill="#63b3ed" stroke="#4299e1" stroke-width="2"/>
-  <line x1="160" y1="160" x2="270" y2="160" stroke="#718096" stroke-width="1" stroke-dasharray="4,3"/>
-  <line x1="270" y1="160" x2="270" y2="240" stroke="#68d391" stroke-width="2.5" marker-end="url(#ag1)"/>
-  <text x="277" y="205" fill="#68d391" font-size="13" font-family="monospace" font-weight="bold">v</text>
-  <line x1="160" y1="65" x2="160" y2="120" stroke="#fc8181" stroke-width="2.5" marker-end="url(#ar1)"/>
-  <text x="100" y="98" fill="#fc8181" font-size="12" font-family="monospace">acceleration</text>
-  <line x1="253" y1="160" x2="198" y2="160" stroke="#fc8181" stroke-width="2.5" marker-end="url(#ar1)"/>
+<div class="fig-wrap">
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:400px;display:block;margin:0 auto;">
   <defs>
-    <marker id="ag1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#68d391"/></marker>
-    <marker id="ar1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#fc8181"/></marker>
+    <!-- Gradient for the ball -->
+    <radialGradient id="ballGrad1" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </radialGradient>
+    <!-- Glow filter for vectors -->
+    <filter id="glow1" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Arrowhead: velocity (teal-green) -->
+    <marker id="arrowV1" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <!-- Arrowhead: acceleration (rose) -->
+    <marker id="arrowA1" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f87171"/>
+    </marker>
+    <!-- Arrowhead: radius (slate) -->
+    <marker id="arrowR1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/>
+    </marker>
   </defs>
+
+  <!-- Subtle background circle fill -->
+  <circle cx="200" cy="200" r="140" fill="rgba(99,102,241,0.04)" stroke="none"/>
+
+  <!-- Orbit circle -->
+  <circle cx="200" cy="200" r="140" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="8,5"/>
+
+  <!-- Centre point -->
+  <circle cx="200" cy="200" r="4" fill="#64748b"/>
+  <text x="212" y="205" fill="#94a3b8" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">O</text>
+
+  <!-- Radius lines (two balls shown) -->
+  <!-- Ball 1 at top (200, 60) -->
+  <line x1="200" y1="200" x2="200" y2="70" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrowR1)"/>
+  <text x="208" y="138" fill="#94a3b8" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">r</text>
+
+  <!-- Ball 2 at right (340, 200) -->
+  <line x1="200" y1="200" x2="330" y2="200" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrowR1)"/>
+  <text x="262" y="193" fill="#94a3b8" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">r</text>
+
+  <!-- Ball 1 at top -->
+  <circle cx="200" cy="60" r="13" fill="url(#ballGrad1)" stroke="#60a5fa" stroke-width="1.5"/>
+
+  <!-- Velocity vector for ball 1 (tangent = rightward) -->
+  <line x1="200" y1="60" x2="290" y2="60" stroke="#34d399" stroke-width="2.5" marker-end="url(#arrowV1)" filter="url(#glow1)"/>
+  <text x="295" y="65" fill="#34d399" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="bold">v</text>
+
+  <!-- Acceleration vector for ball 1 (toward centre = downward) -->
+  <line x1="200" y1="72" x2="200" y2="130" stroke="#f87171" stroke-width="2.5" marker-end="url(#arrowA1)" filter="url(#glow1)"/>
+  <text x="146" y="108" fill="#f87171" font-size="12" font-family="Georgia, 'Times New Roman', serif" font-style="italic">acceleration</text>
+
+  <!-- Ball 2 at right -->
+  <circle cx="340" cy="200" r="13" fill="url(#ballGrad1)" stroke="#60a5fa" stroke-width="1.5"/>
+
+  <!-- Velocity vector for ball 2 (tangent = downward) -->
+  <line x1="340" y1="200" x2="340" y2="290" stroke="#34d399" stroke-width="2.5" marker-end="url(#arrowV1)" filter="url(#glow1)"/>
+  <text x="348" y="250" fill="#34d399" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="bold">v</text>
+
+  <!-- Acceleration vector for ball 2 (toward centre = leftward) -->
+  <line x1="328" y1="200" x2="268" y2="200" stroke="#f87171" stroke-width="2.5" marker-end="url(#arrowA1)" filter="url(#glow1)"/>
+
+  <!-- Legend -->
+  <line x1="30" y1="348" x2="60" y2="348" stroke="#34d399" stroke-width="2.5" marker-end="url(#arrowV1)"/>
+  <text x="68" y="353" fill="#94a3b8" font-size="12" font-family="Georgia, 'Times New Roman', serif">velocity</text>
+  <line x1="150" y1="348" x2="180" y2="348" stroke="#f87171" stroke-width="2.5" marker-end="url(#arrowA1)"/>
+  <text x="188" y="353" fill="#94a3b8" font-size="12" font-family="Georgia, 'Times New Roman', serif">acceleration</text>
 </svg>
-<p style="color: #718096; font-size: 0.85rem; margin-top: 0.5rem; font-family: monospace;">
-  The velocity (green) is always tangent to the circle. The acceleration (red) always points inward.
-</p>
+<p class="fig-caption"><strong>Figure 1.</strong> The velocity (green) is always tangent to the circular path, while the centripetal acceleration (red) always points toward the centre <em>O</em>.</p>
 </div>
 
 Notice two things:
@@ -66,35 +114,76 @@ Notice two things:
 
 Imagine the ball is at position **A**, and a tiny moment later — call it $\Delta t$ — it's at position **B**.
 
-<div style="text-align: center; margin: 2.5rem 0;">
-<svg width="360" height="280" viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg">
+<div class="fig-wrap">
+<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:480px;display:block;margin:0 auto;">
   <defs>
-    <marker id="ab2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#63b3ed"/></marker>
-    <marker id="ap2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#d6bcfa"/></marker>
+    <radialGradient id="ballGrad2" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </radialGradient>
+    <filter id="glow2" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Velocity vectors: purple -->
+    <marker id="arrowVp" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+    <!-- Arc indicator: amber -->
+    <marker id="arrowArc" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <!-- Radius: slate dashed -->
   </defs>
-  <path d="M 80,200 A 140,140 0 0,1 240,80" fill="none" stroke="#4a5568" stroke-width="1.5" stroke-dasharray="6,4"/>
-  <circle cx="240" cy="240" r="4" fill="#718096"/>
-  <text x="248" y="245" fill="#718096" font-size="12" font-family="monospace">O</text>
-  <line x1="240" y1="240" x2="80" y2="200" stroke="#718096" stroke-width="1" stroke-dasharray="4,3"/>
-  <line x1="240" y1="240" x2="240" y2="80" stroke="#718096" stroke-width="1" stroke-dasharray="4,3"/>
-  <text x="148" y="232" fill="#718096" font-size="12" font-family="monospace">r</text>
-  <text x="244" y="168" fill="#718096" font-size="12" font-family="monospace">r</text>
-  <path d="M 240,200 A 40,40 0 0,0 210,226" fill="none" stroke="#f6ad55" stroke-width="1.5"/>
-  <text x="196" y="215" fill="#f6ad55" font-size="12" font-family="monospace">Δθ</text>
-  <circle cx="80" cy="200" r="9" fill="#63b3ed" stroke="#4299e1" stroke-width="2"/>
-  <text x="58" y="195" fill="#90cdf4" font-size="13" font-family="monospace" font-weight="bold">A</text>
-  <circle cx="240" cy="80" r="9" fill="#63b3ed" stroke="#4299e1" stroke-width="2"/>
-  <text x="248" y="78" fill="#90cdf4" font-size="13" font-family="monospace" font-weight="bold">B</text>
-  <path d="M 80,200 A 140,140 0 0,1 240,80" fill="none" stroke="#68d391" stroke-width="2.5"/>
-  <text x="110" y="112" fill="#68d391" font-size="12" font-family="monospace">Δs = v·Δt</text>
-  <line x1="80" y1="200" x2="120" y2="140" stroke="#d6bcfa" stroke-width="2" marker-end="url(#ap2)"/>
-  <text x="125" y="138" fill="#d6bcfa" font-size="12" font-family="monospace">v₁</text>
-  <line x1="240" y1="80" x2="170" y2="64" stroke="#d6bcfa" stroke-width="2" marker-end="url(#ap2)"/>
-  <text x="154" y="58" fill="#d6bcfa" font-size="12" font-family="monospace">v₂</text>
+
+  <!-- Origin O at bottom-right area -->
+  <!-- Ball A at (80, 260), Ball B at (310, 80), Centre O at (310, 310) -->
+
+  <!-- Large orbit arc (dashed, subtle) -->
+  <path d="M 50,290 A 185,185 0 0,1 320,60" fill="none" stroke="#334155" stroke-width="1.5" stroke-dasharray="7,5"/>
+
+  <!-- Centre dot O -->
+  <circle cx="310" cy="310" r="5" fill="#64748b"/>
+  <text x="320" y="316" fill="#94a3b8" font-size="16" font-family="Georgia, 'Times New Roman', serif" font-style="italic">O</text>
+
+  <!-- Radius to A -->
+  <line x1="310" y1="310" x2="82" y2="258" stroke="#475569" stroke-width="1.3" stroke-dasharray="6,4"/>
+  <text x="175" y="310" fill="#94a3b8" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">r</text>
+
+  <!-- Radius to B -->
+  <line x1="310" y1="310" x2="312" y2="82" stroke="#475569" stroke-width="1.3" stroke-dasharray="6,4"/>
+  <text x="318" y="200" fill="#94a3b8" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">r</text>
+
+  <!-- Angle arc Δθ at O -->
+  <path d="M 310,270 A 40,40 0 0,0 272,297" fill="none" stroke="#f59e0b" stroke-width="1.8"/>
+  <text x="255" y="285" fill="#f59e0b" font-size="14" font-family="Georgia, 'Times New Roman', serif" font-style="italic">Δθ</text>
+
+  <!-- Arc from A to B (the path Δs, thick green) -->
+  <path d="M 82,258 A 185,185 0 0,1 312,82" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round"/>
+  <!-- Arc label -->
+  <text x="148" y="135" fill="#34d399" font-size="13" font-family="Georgia, 'Times New Roman', serif" font-style="italic">Δs = v·Δt</text>
+
+  <!-- Ball A -->
+  <circle cx="82" cy="258" r="14" fill="url(#ballGrad2)" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="48" y="254" fill="#93c5fd" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-weight="bold">A</text>
+
+  <!-- Velocity v₁ at A (tangent direction ≈ upper-left from A) -->
+  <line x1="82" y1="258" x2="130" y2="182" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#arrowVp)" filter="url(#glow2)"/>
+  <text x="136" y="178" fill="#a78bfa" font-size="14" font-family="Georgia, 'Times New Roman', serif" font-style="italic">v₁</text>
+
+  <!-- Ball B -->
+  <circle cx="312" cy="82" r="14" fill="url(#ballGrad2)" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="330" y="86" fill="#93c5fd" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-weight="bold">B</text>
+
+  <!-- Velocity v₂ at B (tangent direction ≈ leftward from B) -->
+  <line x1="312" y1="82" x2="230" y2="68" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#arrowVp)" filter="url(#glow2)"/>
+  <text x="214" y="62" fill="#a78bfa" font-size="14" font-family="Georgia, 'Times New Roman', serif" font-style="italic">v₂</text>
+
+  <!-- Right-angle indicator at A (showing v perpendicular to r) -->
+  <!-- small box -->
+  <path d="M 94,243 L 108,252 L 99,266" fill="none" stroke="#475569" stroke-width="1"/>
 </svg>
-<p style="color: #718096; font-size: 0.85rem; margin-top: 0.5rem; font-family: monospace;">
-  In time Δt, the ball moves from A to B. The arc length is Δs = v·Δt and the angle swept is Δθ.
-</p>
+<p class="fig-caption"><strong>Figure 2.</strong> In time $\Delta t$, the ball moves from <strong>A</strong> to <strong>B</strong> along the arc. The arc length is $\Delta s = v\,\Delta t$ and the central angle swept is $\Delta\theta$. The velocity vectors $v_1$ and $v_2$ are each perpendicular to their respective radii.</p>
 </div>
 
 In this short time $\Delta t$:
@@ -115,29 +204,62 @@ $$\Delta\theta = \frac{\Delta s}{r} = \frac{v \cdot \Delta t}{r}$$
 
 Here is the key insight. When the *position* rotates by $\Delta\theta$, the *velocity vector* also rotates by exactly $\Delta\theta$ — because velocity is always perpendicular to the radius, so they rotate together.
 
-<div style="text-align: center; margin: 2.5rem 0;">
-<svg width="300" height="260" viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg">
+<div class="fig-wrap">
+<svg viewBox="0 0 420 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:420px;display:block;margin:0 auto;">
   <defs>
-    <marker id="av1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#d6bcfa"/></marker>
-    <marker id="av2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#f6ad55"/></marker>
-    <marker id="adv" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#fc8181"/></marker>
+    <filter id="glow3" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowV3a" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrowV3b" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowDV" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f87171"/>
+    </marker>
   </defs>
-  <line x1="150" y1="140" x2="260" y2="140" stroke="#d6bcfa" stroke-width="2.5" marker-end="url(#av1)"/>
-  <text x="262" y="144" fill="#d6bcfa" font-size="13" font-family="monospace">v₁</text>
-  <line x1="150" y1="140" x2="230" y2="60" stroke="#f6ad55" stroke-width="2.5" marker-end="url(#av2)"/>
-  <text x="233" y="56" fill="#f6ad55" font-size="13" font-family="monospace">v₂</text>
-  <path d="M 220,140 A 70,70 0 0,0 193,95" fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="4,3"/>
-  <text x="220" y="118" fill="#718096" font-size="12" font-family="monospace">Δθ</text>
-  <line x1="260" y1="140" x2="234" y2="64" stroke="#fc8181" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#adv)"/>
-  <text x="263" y="105" fill="#fc8181" font-size="13" font-family="monospace">Δv</text>
-  <circle cx="150" cy="140" r="4" fill="#718096"/>
-  <text x="40" y="28" fill="#718096" font-size="12" font-family="monospace">Both vectors have</text>
-  <text x="40" y="45" fill="#718096" font-size="12" font-family="monospace">magnitude v but</text>
-  <text x="40" y="62" fill="#718096" font-size="12" font-family="monospace">differ by angle Δθ.</text>
+
+  <!-- Tail point of both vectors -->
+  <circle cx="160" cy="190" r="4" fill="#64748b"/>
+
+  <!-- v₁: rightward (purple) — length 130 -->
+  <line x1="160" y1="190" x2="285" y2="190" stroke="#a78bfa" stroke-width="2.8" marker-end="url(#arrowV3a)" filter="url(#glow3)"/>
+  <text x="290" y="195" fill="#a78bfa" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">v₁</text>
+
+  <!-- v₂: angled ~55° above horizontal (amber) — length 130 -->
+  <!-- End point: 160+130·cos55°, 190-130·sin55° ≈ 160+74.6, 190-106.5 = (235, 84) -->
+  <line x1="160" y1="190" x2="235" y2="84" stroke="#f59e0b" stroke-width="2.8" marker-end="url(#arrowV3b)" filter="url(#glow3)"/>
+  <text x="240" y="78" fill="#f59e0b" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">v₂</text>
+
+  <!-- Δv: from tip of v₁ (285,190) to tip of v₂ (235,84), dashed red -->
+  <line x1="285" y1="190" x2="237" y2="88" stroke="#f87171" stroke-width="2.5" stroke-dasharray="6,3" marker-end="url(#arrowDV)" filter="url(#glow3)"/>
+  <text x="292" y="145" fill="#f87171" font-size="15" font-family="Georgia, 'Times New Roman', serif" font-style="italic">Δv</text>
+
+  <!-- Angle arc Δθ near tail -->
+  <path d="M 240,190 A 80,80 0 0,0 214,131" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="246" y="168" fill="#94a3b8" font-size="13" font-family="Georgia, 'Times New Roman', serif" font-style="italic">Δθ</text>
+
+  <!-- Equal length tick marks showing |v₁| = |v₂| -->
+  <!-- tick on v₁ at midpoint (222,190) -->
+  <line x1="222" y1="183" x2="222" y2="197" stroke="#64748b" stroke-width="1.5"/>
+  <!-- tick on v₂ at midpoint ~ (197, 137) -->
+  <line x1="191" y1="139" x2="203" y2="131" stroke="#64748b" stroke-width="1.5"/>
+
+  <!-- Label: |v₁| = |v₂| = v -->
+  <text x="22" y="40" fill="#94a3b8" font-size="13" font-family="Georgia, 'Times New Roman', serif" font-style="italic">|v₁| = |v₂| = v</text>
+  <text x="22" y="60" fill="#64748b" font-size="12" font-family="Georgia, 'Times New Roman', serif">(speed constant)</text>
+
+  <!-- Small arc showing the triangle relation -->
+  <!-- Faint arc connecting tips of v₁ and v₂ centered at tail -->
+  <path d="M 285,190 A 130,130 0 0,0 235,84" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,4"/>
+
+  <!-- Caption note bottom -->
+  <text x="30" y="295" fill="#64748b" font-size="12" font-family="Georgia, 'Times New Roman', serif">For small Δθ: chord ≈ arc, so |Δv| ≈ v · Δθ</text>
 </svg>
-<p style="color: #718096; font-size: 0.85rem; margin-top: 0.5rem; font-family: monospace;">
-  Placing v₁ and v₂ tail-to-tail reveals Δv — the change in velocity.
-</p>
+<p class="fig-caption"><strong>Figure 3.</strong> Placing $\mathbf{v}_1$ and $\mathbf{v}_2$ tail-to-tail. Both have magnitude $v$ but are rotated by $\Delta\theta$. The chord connecting their tips is $\Delta\mathbf{v}$, the change in velocity. For small angles, $|\Delta v| \approx v\,\Delta\theta$.</p>
 </div>
 
 Both $v_1$ and $v_2$ have the same magnitude $v$ (speed is constant). The angle between them is $\Delta\theta$.
@@ -166,9 +288,9 @@ The $\Delta t$ cancels, and we get:
 
 <div style="background: rgba(99,179,237,0.08); border: 1px solid rgba(99,179,237,0.25); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; text-align: center;" markdown="1">
 
-$$a = \frac{v^2}{r}$$
+$$\boxed{a = \frac{v^2}{r}}$$
 
-<p style="color: #718096; font-size: 0.85rem; margin: 0.5rem 0 0; font-family: monospace;">centripetal acceleration = speed² / radius</p>
+<p style="color: #94a3b8; font-size: 0.85rem; margin: 0.5rem 0 0; font-family: Georgia, 'Times New Roman', serif; font-style: italic;">centripetal acceleration = speed² / radius</p>
 </div>
 
 ---

@@ -36,21 +36,83 @@ layout: default
     </div>
 </article>
 
-<!-- MathJax v3 — handles kramdown's \[...\] and \(...\) output correctly -->
+<!-- MathJax v3 with SVG output — publication-quality scalable vector math -->
 <script>
     MathJax = {
         tex: {
             inlineMath: [['$', '$'], ['\\(', '\\)']],
             displayMath: [['\\[', '\\]']],
-            tags: 'ams'
+            tags: 'ams',
+            packages: { '[+]': ['ams', 'boldsymbol'] },
+            macros: {
+                RR: '\\mathbb{R}',
+                dd: ['\\mathrm{d}#1', 1],
+                vec: ['\\boldsymbol{#1}', 1]
+            }
+        },
+        svg: {
+            fontCache: 'global',
+            scale: 1.1,
+            minScale: 0.5,
+            mtextInheritFont: false,
+            merrorInheritFont: true,
+            mathmlSpacing: false,
+            skipAttributes: {},
+            exFactor: 0.5,
+            displayAlign: 'center',
+            displayIndent: '0'
         },
         options: {
-            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+            renderActions: {
+                addMenu: []
+            }
         },
         startup: {
-            typeset: true
+            typeset: true,
+            ready() {
+                MathJax.startup.defaultReady();
+            }
+        },
+        chtml: {
+            scale: 1,
+            matchFontHeight: true
         }
     };
 </script>
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+<!-- tex-svg.js: true SVG output — crisp at any zoom, publication-quality -->
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
 </script>
+
+<style>
+    /* Publication-quality math display */
+    .MathJax_Display,
+    mjx-container[display="true"] {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0.75rem 0;
+    }
+
+    mjx-container svg {
+        max-width: 100%;
+    }
+
+    /* Figure captions */
+    .fig-caption {
+        font-family: 'Inter', -apple-system, sans-serif;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        text-align: center;
+        margin-top: 0.75rem;
+        font-style: italic;
+        letter-spacing: 0.01em;
+        line-height: 1.5;
+    }
+
+    /* Figure wrapper */
+    .fig-wrap {
+        text-align: center;
+        margin: 2.5rem auto;
+        max-width: 520px;
+    }
+</style>
