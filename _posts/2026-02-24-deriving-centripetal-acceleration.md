@@ -230,14 +230,28 @@ Here is the key insight. When the *position* rotates by $\Delta\theta$, the *vel
 
 <div class="fig-wrap">
 <!--
-  FIGURE 3: 500×420 canvas. Well-spaced velocity triangle.
-  Common tail at (130, 270).
-  v₁: rightward length 200 → tip (330, 270)
-  Δθ = 38°. v₂: at 38° above horizontal (upward-left in SVG since y is down, angle is CCW from +x)
-    tip: (130 + 200*cos38, 270 - 200*sin38) = (130+158, 270-123) = (288, 147)
-  Δv: from (330, 270) to (288, 147) — the chord
+  FIGURE 3 v4: 500×400px canvas. Symmetric velocity fan.
+  Tail at centre-bottom: (250, 330). Δθ = 50° total, split ±25° from vertical.
+  Both vectors length 210px and fan upward symmetrically.
+  v₁: angle = 270°-25° = 245° from +x (screen coords, going up-left) — no, easier:
+  Let's point v₁ toward upper-right at angle 25° right of vertical (i.e. 65° from +x)
+    tip₁: (250 + 210*cos65, 330 - 210*sin65) = (250+89, 330-190) = (339, 140)
+  v₂: angle 25° left of vertical (i.e. 115° from +x equiv to 25° above horizontal going left NO)
+  Actually: let's be simpler. Fan vectors symmetrically upward.
+  v₁ at 55° from +x (going upper-right): tip (250+210*cos55, 330-210*sin55) = (250+120, 330-172) = (370, 158)
+  v₂ at 125° from +x (going upper-left): tip (250+210*cos125, 330-210*sin125) = (250-120, 330-172) = (130, 158)
+  Δv vector: from tip of v₁ (370,158) to tip of v₂ (130,158) — purely leftward.
+  Angle between v₁ and v₂ = 125°-55° = 70° — too large.
+  
+  Better: use 40° between them, centered on vertical (straight up).
+  v₁ at 70° from +x: tip (250+210*cos70, 330-210*sin70) = (250+72, 330-197) = (322, 133)
+  v₂ at 110° from +x: tip (250+210*cos110, 330-210*sin110) = (250-72, 330-197) = (178, 133)
+  Δv: from (322, 133) to (178, 133) — horizontal, length=144.
+  
+  This is elegant: the triangle is isoceles, Δv is horizontal, both vectors point upward.
+  Angle arc at tail between v₁ (70° from +x) and v₂ (110° from +x).
 -->
-<svg viewBox="0 0 500 420" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:500px;display:block;margin:0 auto;">
+<svg viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:500px;display:block;margin:0 auto;">
   <defs>
     <marker id="g3v1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
       <polygon points="0 0, 10 4, 0 8" fill="#a78bfa"/>
@@ -250,42 +264,44 @@ Here is the key insight. When the *position* rotates by $\Delta\theta$, the *vel
     </marker>
   </defs>
 
-  <!-- headline at top -->
-  <text x="250" y="38" text-anchor="middle" font-size="16" font-family="Georgia,'Times New Roman',serif" fill="#94a3b8">Place <tspan font-style="italic">v₁</tspan> and <tspan font-style="italic">v₂</tspan> tail-to-tail — both have length <tspan font-style="italic">v</tspan></text>
+  <!-- common tail: centre-bottom -->
+  <circle cx="250" cy="330" r="6" fill="#64748b"/>
+  <text x="254" y="355" font-size="16" font-family="Georgia,'Times New Roman',serif" fill="#64748b" text-anchor="middle">tail</text>
 
-  <!-- common tail point -->
-  <circle cx="130" cy="270" r="5.5" fill="#64748b"/>
+  <!-- v₁: 70° from +x → upper-right. tip at (322, 133) -->
+  <line x1="250" y1="330" x2="310" y2="145" stroke="#a78bfa" stroke-width="5" marker-end="url(#g3v1)"/>
+  <text x="322" y="130" font-size="24" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#a78bfa">v₁</text>
 
-  <!-- v₁: rightward to (330, 270), length 200 -->
-  <line x1="130" y1="270" x2="318" y2="270" stroke="#a78bfa" stroke-width="4.5" marker-end="url(#g3v1)"/>
-  <text x="336" y="278" font-size="23" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#a78bfa">v₁</text>
+  <!-- v₂: 110° from +x → upper-left. tip at (178, 133) -->
+  <line x1="250" y1="330" x2="190" y2="145" stroke="#f59e0b" stroke-width="5" marker-end="url(#g3v2)"/>
+  <text x="145" y="130" font-size="24" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#f59e0b">v₂</text>
 
-  <!-- v₂: at 38° above horizontal, length 200; tip (288, 147) -->
-  <line x1="130" y1="270" x2="276" y2="152" stroke="#f59e0b" stroke-width="4.5" marker-end="url(#g3v2)"/>
-  <text x="280" y="138" font-size="23" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#f59e0b">v₂</text>
+  <!-- Δv: from tip of v₁ (322,133) to tip of v₂ (178,133) — horizontal leftward, dashed -->
+  <line x1="322" y1="133" x2="196" y2="133" stroke="#ef4444" stroke-width="3.5" stroke-dasharray="9,4" marker-end="url(#g3dv)"/>
+  <text x="237" y="118" font-size="22" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#ef4444" text-anchor="middle">Δv</text>
 
-  <!-- Δv: from tip(v₁)=(330,270) to tip(v₂)=(288,147), dashed red -->
-  <line x1="330" y1="270" x2="292" y2="161" stroke="#ef4444" stroke-width="3.5" stroke-dasharray="8,4" marker-end="url(#g3dv)"/>
-  <text x="342" y="220" font-size="23" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#ef4444">Δv</text>
+  <!-- angle arc Δθ at tail -->
+  <!-- v₁ is at 70° from +x, v₂ at 110°. Arc from (250+55*cos70, 330-55*sin70) to (250+55*cos110, 330-55*sin110) -->
+  <!-- cos70=0.342, sin70=0.940: (250+19, 330-52) = (269, 278) -->
+  <!-- cos110=-0.342, sin110=0.940: (250-19, 330-52) = (231, 278) -->
+  <path d="M 269,278 A 55,55 0 0,0 231,278" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <text x="250" y="262" font-size="18" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#94a3b8" text-anchor="middle">Δθ</text>
 
-  <!-- angle arc Δθ at tail, between v₁ (+x dir) and v₂ (38°) -->
-  <!-- arc at radius 64 from (130,270). From (194,270) sweeping to (130+64*cos38, 270-64*sin38)=(180,230) -->
-  <path d="M 194,270 A 64,64 0 0,0 180,230" fill="none" stroke="#64748b" stroke-width="2.2" stroke-dasharray="4,3"/>
-  <text x="200" y="252" font-size="18" font-family="Georgia,'Times New Roman',serif" font-style="italic" fill="#94a3b8">Δθ</text>
+  <!-- equal-length tick marks on each vector, at midpoint -->
+  <!-- Midpt of v₁: (250+(310-250)/2, 330+(145-330)/2) = (280, 238). Perp to v₁ (dir=(60,-185)/~194=(0.309,-0.951)): perp=(0.951,0.309). Tick: ±8px perp -->
+  <line x1="273" y1="244" x2="280" y2="222" stroke="#64748b" stroke-width="2.5"/>
+  <!-- Midpt of v₂: (220, 238). Perp to v₂ (dir=(-60,-185)/~194=(-0.309,-0.951)): perp=(-0.951,0.309). Tick: ±8px -->
+  <line x1="227" y1="244" x2="220" y2="222" stroke="#64748b" stroke-width="2.5"/>
 
-  <!-- tick marks showing equal lengths -->
-  <!-- Midpoint of v₁ at (230, 270); perp is vertical -->
-  <line x1="230" y1="260" x2="230" y2="280" stroke="#64748b" stroke-width="2.5"/>
-  <!-- Midpoint of v₂ at (203, 211); perp direction to v₂ (cos38,sin38)=(0.788,0.616); perp=(-0.616,0.788) scaled 10 -->
-  <!-- perp from mid: (203-6.2, 211+7.9)=(196.8,218.9) → (203+6.2, 211-7.9)=(209.2,203.1) -->
-  <line x1="197" y1="219" x2="209" y2="203" stroke="#64748b" stroke-width="2.5"/>
+  <!-- faint arc showing tips trace a circle centred at tail -->
+  <path d="M 322,133 A 210,210 0 0,1 178,133" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,7"/>
 
-  <!-- faint dashed circle arc showing tips trace a circle (geometric insight) -->
-  <path d="M 330,270 A 200,200 0 0,0 288,147" fill="none" stroke="#1e293b" stroke-width="1.2" stroke-dasharray="3,6"/>
+  <!-- label: |v₁| = |v₂| = v -->
+  <text x="42" y="62" font-size="17" font-family="Georgia,'Times New Roman',serif" fill="#94a3b8">|<tspan font-style="italic">v₁</tspan>| = |<tspan font-style="italic">v₂</tspan>| = <tspan font-style="italic">v</tspan></text>
+  <text x="42" y="83" font-size="14" font-family="Georgia,'Times New Roman',serif" fill="#64748b">(speed constant, only direction changes)</text>
 
-  <!-- key insight label bottom -->
-  <text x="250" y="360" text-anchor="middle" font-size="16" font-family="Georgia,'Times New Roman',serif" fill="#64748b">For small Δθ:  chord ≈ arc, so |Δv| ≈ <tspan font-style="italic">v</tspan> · Δθ</text>
-  <text x="250" y="385" text-anchor="middle" font-size="14" font-family="Georgia,'Times New Roman',serif" fill="#475569">(the chord |Δv| and the arc <tspan font-style="italic">v</tspan>·Δθ become equal as Δθ → 0)</text>
+  <!-- key result -->
+  <text x="250" y="390" text-anchor="middle" font-size="15" font-family="Georgia,'Times New Roman',serif" fill="#64748b">For small Δθ: |Δv| ≈ <tspan font-style="italic">v</tspan> · Δθ</text>
 </svg>
 <p class="fig-caption"><strong>Figure 3.</strong> With $\mathbf{v}_1$ and $\mathbf{v}_2$ placed tail-to-tail, the angle between them is $\Delta\theta$ (same as the angle swept by the position vector). Tick marks show $|v_1| = |v_2| = v$. The chord $\Delta\mathbf{v}$ (red) satisfies $|\Delta v| \approx v\,\Delta\theta$ for small $\Delta\theta$.</p>
 </div>
