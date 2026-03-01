@@ -333,7 +333,7 @@
             overflow: hidden;
         }
 
-        #sim-canvas {
+        #gl-canvas {
             display: block;
             width: 100%;
             height: 100%;
@@ -527,7 +527,9 @@
 
         <!-- Canvas -->
         <div class="canvas-wrap">
-            <canvas id="sim-canvas"></canvas>
+            <canvas id="gl-canvas"></canvas>
+            <canvas id="overlay-canvas"
+                style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
             <div class="canvas-overlay" id="canvas-overlay">t = 0.000</div>
             <div class="canvas-overlay" id="zoom-overlay" style="top: auto; bottom: 1rem; right: 1rem;">1.0×</div>
             <div class="canvas-hint" id="canvas-hint">Click anywhere to place a body — drag to set velocity
@@ -536,1046 +538,854 @@
     </div>
 
     <script>
-        // ═══════════════════════════════════════════════════════════════════
-        // Gravitational N-Body Simulator
-        // Direct O(N²) pairwise force + Leapfrog (Velocity Verlet)
-        // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// Gravitational N-Body Simulator (WebGL + Web Worker)
+// ═══════════════════════════════════════════════════════════════════
 
-        const G = 1.0;
-        const SOFTENING = 1e-4;
+const G = 1.0;
 
-        // ─── Body colors ──────────────────────────────────────────────────
-        const COLORS = [
-            '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8e6cf',
-            '#ff8b94', '#6c5ce7', '#fdcb6e', '#00b894',
-            '#e17055', '#74b9ff', '#fd79a8', '#55efc4',
-            '#ffeaa7', '#dfe6e9', '#b2bec3', '#636e72'
-        ];
+// ─── State ────────────────────────────────────────────────────────
+let N = 0;
+let positions = new Float64Array(0);
+let colors = new Float32Array(0);
+let masses = []; // To keep track of masses before sending to worker
 
-        // ─── State ────────────────────────────────────────────────────────
-        let bodies = [];
-        let simTime = 0;
-        let E0 = null;
-        let running = false;
-        let colorIndex = 0;
-        let trailLength = 150;
-        let substeps = 4;
-        let dt = 0.002;
-        let placingMass = 1.0;
+let simTime = 0;
+let E0 = null;
+let running = false;
+let colorIndex = 0;
+let trailLength = 150;
+let substeps = 4;
+let dt = 0.002;
+let placingMass = 1.0;
 
-        // Mouse interaction
-        let mouseDown = false;
-        let mouseStartX = 0, mouseStartY = 0;
-        let mouseCurrX = 0, mouseCurrY = 0;
+let trails = []; // Array of [{x,y}, ...]
 
-        // Pan interaction
-        let isPanning = false;
-        let panStartX = 0, panStartY = 0;
+// Mouse interaction
+let mouseDown = false;
+let mouseStartX = 0, mouseStartY = 0;
+let mouseCurrX = 0, mouseCurrY = 0;
 
-        // Zoom state
-        let baseScale = 1.0; // multiplier on top of default scale
-        let panX = 0, panY = 0; // pan offset in screen pixels
+// Pan interaction
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
 
-        // FPS tracking
-        let frameCount = 0;
-        let lastFpsTime = performance.now();
-        let currentFps = 0;
+// Zoom state
+let baseScale = 1.0;
+let panX = 0, panY = 0;
 
-        // ─── Canvas setup ─────────────────────────────────────────────────
-        const canvas = document.getElementById('sim-canvas');
-        const ctx = canvas.getContext('2d');
-        let W, H, scale, offsetX, offsetY;
+// FPS tracking
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let currentFps = 0;
 
-        function resizeCanvas() {
-            const wrap = canvas.parentElement;
-            const dpr = window.devicePixelRatio || 1;
-            W = wrap.clientWidth;
-            H = wrap.clientHeight;
-            canvas.width = W * dpr;
-            canvas.height = H * dpr;
-            canvas.style.width = W + 'px';
-            canvas.style.height = H + 'px';
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+// Energy stats
+let currentEnergy = 0;
 
-            // Coordinate system: [-range, range] in both axes, centered
-            const defaultScale = Math.min(W, H) / 8;
-            scale = defaultScale * baseScale;
-            offsetX = W / 2 + panX;
-            offsetY = H / 2 + panY;
-        }
+const COLORS = [
+    '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8e6cf',
+    '#ff8b94', '#6c5ce7', '#fdcb6e', '#00b894',
+    '#e17055', '#74b9ff', '#fd79a8', '#55efc4',
+    '#ffeaa7', '#dfe6e9', '#b2bec3', '#636e72'
+];
 
-        function resetView() {
-            baseScale = 1.0;
-            panX = 0;
-            panY = 0;
-            resizeCanvas();
-            updateZoomDisplay();
-        }
+function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    return [r, g, b];
+}
 
-        function updateZoomDisplay() {
-            document.getElementById('zoom-overlay').textContent = baseScale.toFixed(1) + '×';
-        }
+// ─── Canvases & WebGL Setup ───────────────────────────────────────
+const canvasContainer = document.querySelector('.canvas-wrap');
+const glCanvas = document.getElementById('gl-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const gl = glCanvas.getContext('webgl') || glCanvas.getContext('experimental-webgl');
+const ctx = overlayCanvas.getContext('2d');
 
-        function toScreen(x, y) {
-            return [x * scale + offsetX, -y * scale + offsetY];
-        }
+if (!gl) alert('WebGL not supported in your browser.');
 
-        function toSim(sx, sy) {
-            return [(sx - offsetX) / scale, -(sy - offsetY) / scale];
-        }
+let W, H, scale, offsetX, offsetY;
 
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+// WebGL variables
+let shaderProgram, positionBuffer, colorBuffer, sizeBuffer;
+let aPosition, aColor, aSize;
+let uResolution, uOffset, uScale, uIsLargeN;
 
-        // ─── Body class ───────────────────────────────────────────────────
-        class Body {
-            constructor(x, y, vx, vy, mass, color) {
-                this.x = x; this.y = y;
-                this.vx = vx; this.vy = vy;
-                this.ax = 0; this.ay = 0;
-                this.mass = mass;
-                this.color = color || COLORS[colorIndex++ % COLORS.length];
-                this.trail = [];
+function initWebGL() {
+    const vsSource = `
+                attribute vec2 aPosition;
+                attribute vec3 aColor;
+                attribute float aSize;
+                uniform vec2 uResolution;
+                uniform vec2 uOffset;
+                uniform float uScale;
+                uniform float uIsLargeN;
+                varying vec3 vColor;
+                varying float vIsLargeN;
+                void main() {
+                    vec2 screenPos = vec2(aPosition.x * uScale + uOffset.x, -aPosition.y * uScale + uOffset.y);
+                    vec2 clipSpace = (screenPos / uResolution) * 2.0 - 1.0;
+                    clipSpace.y = -clipSpace.y;
+                    gl_Position = vec4(clipSpace, 0.0, 1.0);
+                    gl_PointSize = uIsLargeN > 0.5 ? 2.0 : aSize;
+                    vColor = aColor;
+                    vIsLargeN = uIsLargeN;
+                }`;
+
+    const fsSource = `
+                precision mediump float;
+                varying vec3 vColor;
+                varying float vIsLargeN;
+                void main() {
+                    if (vIsLargeN > 0.5) {
+                        gl_FragColor = vec4(vColor, 1.0);
+                    } else {
+                        vec2 coord = gl_PointCoord - vec2(0.5);
+                        float dist = length(coord) * 2.0;
+                        if (dist > 1.0) discard;
+                        float alpha = 1.0 - smoothstep(0.5, 1.0, dist);
+                        vec3 finalColor = mix(vColor, vec3(1.0), 1.0 - smoothstep(0.0, 0.3, dist));
+                        gl_FragColor = vec4(finalColor, alpha);
+                    }
+                }`;
+
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return null;
+        return shader;
+    }
+
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+    shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+
+    positionBuffer = gl.createBuffer();
+    colorBuffer = gl.createBuffer();
+    sizeBuffer = gl.createBuffer();
+
+    aPosition = gl.getAttribLocation(shaderProgram, 'aPosition');
+    aColor = gl.getAttribLocation(shaderProgram, 'aColor');
+    aSize = gl.getAttribLocation(shaderProgram, 'aSize');
+
+    uResolution = gl.getUniformLocation(shaderProgram, 'uResolution');
+    uOffset = gl.getUniformLocation(shaderProgram, 'uOffset');
+    uScale = gl.getUniformLocation(shaderProgram, 'uScale');
+    uIsLargeN = gl.getUniformLocation(shaderProgram, 'uIsLargeN');
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+}
+
+initWebGL();
+
+function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    W = canvasContainer.clientWidth;
+    H = canvasContainer.clientHeight;
+
+    glCanvas.width = W * dpr;
+    glCanvas.height = H * dpr;
+    glCanvas.style.width = W + 'px';
+    glCanvas.style.height = H + 'px';
+    gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+
+    overlayCanvas.width = W * dpr;
+    overlayCanvas.height = H * dpr;
+    overlayCanvas.style.width = W + 'px';
+    overlayCanvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const defaultScale = Math.min(W, H) / 8;
+    scale = defaultScale * baseScale;
+    offsetX = W / 2 + panX;
+    offsetY = H / 2 + panY;
+}
+
+function resetView() {
+    baseScale = 1.0;
+    panX = 0; panY = 0;
+    resizeCanvas();
+    updateZoomDisplay();
+}
+
+function updateZoomDisplay() {
+    document.getElementById('zoom-overlay').textContent = baseScale.toFixed(1) + '×';
+}
+
+function toScreen(x, y) { return [x * scale + offsetX, -y * scale + offsetY]; }
+function toSim(sx, sy) { return [(sx - offsetX) / scale, -(sy - offsetY) / scale]; }
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ─── Web Worker Setup ─────────────────────────────────────────────
+const worker = new Worker('physics-worker.js');
+let workerBusy = false;
+
+worker.onmessage = function (e) {
+    const msg = e.data;
+    if (msg.type === 'positions') {
+        N = msg.n;
+        positions = new Float64Array(msg.data);
+        currentEnergy = msg.energy;
+        simTime = msg.simTime;
+
+        if (N < 500 && trailLength > 0) {
+            for (let i = 0; i < N; i++) {
+                if (!trails[i]) trails[i] = [];
+                trails[i].push({ x: positions[i * 2], y: positions[i * 2 + 1] });
+                if (trails[i].length > trailLength) trails[i].shift();
             }
         }
+        workerBusy = false;
+    } else if (msg.type === 'bodyAdded') {
+        N = msg.n;
+        currentEnergy = msg.energy;
+        workerBusy = false;
+    } else if (msg.type === 'cleared') {
+        workerBusy = false;
+    }
+};
 
-        // ─── Barnes-Hut Quadtree ───────────────────────────────────────
-        const BH_THETA = 0.7; // Opening angle (higher = faster but less accurate)
-        const BH_THRESHOLD = 200; // Use Barnes-Hut when N > this
+function sendInitToWorker(bodies) {
+    workerBusy = true;
+    N = bodies.length;
+    const xa = new Float64Array(N); const ya = new Float64Array(N);
+    const vxa = new Float64Array(N); const vya = new Float64Array(N);
+    const ma = new Float64Array(N);
 
-        class QuadNode {
-            constructor(cx, cy, halfSize) {
-                this.cx = cx;       // Center x
-                this.cy = cy;       // Center y
-                this.halfSize = halfSize;
-                this.mass = 0;      // Total mass in this cell
-                this.comX = 0;      // Center of mass x
-                this.comY = 0;      // Center of mass y
-                this.children = null; // [NW, NE, SW, SE] or null
-                this.bodyIndex = -1;  // Index if leaf with single body
-                this.count = 0;      // Number of bodies in this cell
+    const cols = new Float32Array(N * 3);
+    const sizes = new Float32Array(N);
+    trails = []; masses = [];
+
+    for (let i = 0; i < N; i++) {
+        const b = bodies[i];
+        xa[i] = b.x; ya[i] = b.y; vxa[i] = b.vx; vya[i] = b.vy; ma[i] = b.mass;
+        masses.push(b.mass);
+
+        const rgb = hexToRgb(b.color);
+        cols[i * 3] = rgb[0]; cols[i * 3 + 1] = rgb[1]; cols[i * 3 + 2] = rgb[2];
+        sizes[i] = Math.max(8, Math.min(32, 10 * Math.cbrt(b.mass)));
+        trails.push([{ x: b.x, y: b.y }]);
+    }
+    colors = cols;
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.STATIC_DRAW);
+
+    worker.postMessage({ type: 'init', n: N, x: xa.buffer, y: ya.buffer, vx: vxa.buffer, vy: vya.buffer, mass: ma.buffer }, [xa.buffer, ya.buffer, vxa.buffer, vya.buffer, ma.buffer]);
+}
+
+function sendAddBodyToWorker(x, y, vx, vy, m, color) {
+    workerBusy = true;
+    masses.push(m);
+    const newCols = new Float32Array((N + 1) * 3);
+    newCols.set(colors);
+    const rgb = hexToRgb(color);
+    newCols[N * 3] = rgb[0]; newCols[N * 3 + 1] = rgb[1]; newCols[N * 3 + 2] = rgb[2];
+    colors = newCols;
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+
+    const newSizes = new Float32Array(N + 1);
+    for (let i = 0; i <= N; i++) newSizes[i] = Math.max(8, Math.min(32, 10 * Math.cbrt(masses[i])));
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, newSizes, gl.STATIC_DRAW);
+    trails.push([{ x, y }]);
+
+    worker.postMessage({ type: 'addBody', x: x, y: y, vx: vx, vy: vy, mass: m });
+}
+
+// ─── Rendering ────────────────────────────────────────────────────
+function render() {
+    gl.clearColor(0.04, 0.04, 0.1, 0.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    if (N > 0 && positions.length >= N * 2) {
+        gl.useProgram(shaderProgram);
+        gl.uniform2f(uResolution, glCanvas.width, glCanvas.height);
+        gl.uniform2f(uOffset, offsetX, offsetY);
+        gl.uniform1f(uScale, scale);
+        gl.uniform1f(uIsLargeN, N > 500 ? 1.0 : 0.0);
+
+        const posF32 = new Float32Array(positions);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, posF32, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(aPosition);
+        gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.enableVertexAttribArray(aColor);
+        gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer);
+        gl.enableVertexAttribArray(aSize);
+        gl.vertexAttribPointer(aSize, 1, gl.FLOAT, false, 0, 0);
+
+        if (N > 500) gl.disable(gl.BLEND);
+        else { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); }
+
+        gl.drawArrays(gl.POINTS, 0, N);
+    }
+
+    ctx.clearRect(0, 0, W, H);
+
+    const isLargeN = N > 500;
+    const isHugeN = N > 5000;
+
+    if (!isHugeN) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+        ctx.lineWidth = 1;
+        const gridStep = scale;
+        for (let gx = offsetX % gridStep; gx < W; gx += gridStep) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+        for (let gy = offsetY % gridStep; gy < H; gy += gridStep) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+    }
+
+    if (N > 0 && positions.length >= N * 2) {
+        let totalM = 0, comX = 0, comY = 0;
+        for (let i = 0; i < N; i++) {
+            const m = masses[i];
+            totalM += m; comX += m * positions[i * 2]; comY += m * positions[i * 2 + 1];
+        }
+        comX /= totalM; comY /= totalM;
+        const [scx, scy] = toScreen(comX, comY);
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(scx - 6, scy); ctx.lineTo(scx + 6, scy);
+        ctx.moveTo(scx, scy - 6); ctx.lineTo(scx, scy + 6);
+        ctx.stroke();
+    }
+
+    if (!isLargeN && trailLength > 0) {
+        for (let b = 0; b < N; b++) {
+            const tr = trails[b];
+            if (!tr || tr.length < 2) continue;
+            const c = colors;
+            const hexColor = `rgb(${Math.floor(c[b * 3] * 255)},${Math.floor(c[b * 3 + 1] * 255)},${Math.floor(c[b * 3 + 2] * 255)})`;
+            const len = tr.length;
+            for (let i = 1; i < len; i++) {
+                const alpha = (i / len) * 0.7;
+                ctx.strokeStyle = hexColor.replace('rgb', 'rgba').replace(')', `,${alpha})`);
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                const [x1, y1] = toScreen(tr[i - 1].x, tr[i - 1].y);
+                const [x2, y2] = toScreen(tr[i].x, tr[i].y);
+                ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
             }
         }
+    }
 
-        function buildQuadtree(bodies) {
-            if (bodies.length === 0) return null;
-            // Find bounding box
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            for (const b of bodies) {
-                if (b.x < minX) minX = b.x;
-                if (b.x > maxX) maxX = b.x;
-                if (b.y < minY) minY = b.y;
-                if (b.y > maxY) maxY = b.y;
-            }
-            const dx = maxX - minX;
-            const dy = maxY - minY;
-            const halfSize = Math.max(dx, dy) * 0.55 + 0.1; // slight padding
-            const cx = (minX + maxX) * 0.5;
-            const cy = (minY + maxY) * 0.5;
+    if (mouseDown) {
+        const [sx, sy] = [mouseStartX, mouseStartY];
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(mouseCurrX, mouseCurrY); ctx.stroke();
+        ctx.setLineDash([]);
 
-            const root = new QuadNode(cx, cy, halfSize);
-            for (let i = 0; i < bodies.length; i++) {
-                insertBody(root, i, bodies);
-            }
-            return root;
+        ctx.fillStyle = COLORS[colorIndex % COLORS.length];
+        ctx.globalAlpha = 0.5;
+        const r = Math.max(3, 4 * Math.cbrt(placingMass));
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+// ─── UI Updates ───────────────────────────────────────────────────
+function updateStats() {
+    document.getElementById('stat-bodies').textContent = N;
+    document.getElementById('stat-time').textContent = simTime.toFixed(3);
+    document.getElementById('canvas-overlay').textContent = `t = ${simTime.toFixed(3)}`;
+
+    if (N >= 2 && currentEnergy !== undefined) {
+        document.getElementById('stat-energy').textContent = currentEnergy.toExponential(4);
+        if (E0 !== null && E0 !== 0) {
+            const dE = Math.abs((currentEnergy - E0) / E0);
+            const el = document.getElementById('stat-derror');
+            el.textContent = dE.toExponential(2);
+            el.className = 'stat-value ' + (dE < 1e-6 ? 'good' : dE < 1e-3 ? 'warn' : 'bad');
         }
+    } else {
+        document.getElementById('stat-energy').textContent = '—';
+        document.getElementById('stat-derror').textContent = '—';
+        document.getElementById('stat-derror').className = 'stat-value';
+    }
+    document.getElementById('stat-fps').textContent = Math.round(currentFps);
+}
 
-        function insertBody(node, idx, bodies) {
-            const b = bodies[idx];
-            if (node.count === 0) {
-                // Empty node: store body here
-                node.bodyIndex = idx;
-                node.mass = b.mass;
-                node.comX = b.x;
-                node.comY = b.y;
-                node.count = 1;
-                return;
-            }
+// ─── Main loop ────────────────────────────────────────────────────
+function loop() {
+    if (running && N >= 2 && !workerBusy) {
+        workerBusy = true;
+        worker.postMessage({ type: 'step', dt: dt, substeps: substeps });
+    }
 
-            // If this is a leaf with one body, subdivide first
-            if (node.children === null) {
-                subdivide(node, bodies);
-            }
+    render();
+    updateStats();
 
-            // Insert into appropriate child
-            const quadrant = getQuadrant(node, b.x, b.y);
-            insertBody(node.children[quadrant], idx, bodies);
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsTime > 500) {
+        currentFps = frameCount / ((now - lastFpsTime) / 1000);
+        frameCount = 0;
+        lastFpsTime = now;
+    }
 
-            // Update center of mass
-            const totalMass = node.mass + b.mass;
-            node.comX = (node.comX * node.mass + b.x * b.mass) / totalMass;
-            node.comY = (node.comY * node.mass + b.y * b.mass) / totalMass;
-            node.mass = totalMass;
-            node.count++;
+    requestAnimationFrame(loop);
+}
+
+// ─── Mouse events ─────────────────────────────────────────────────
+overlayCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = overlayCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const [simX, simY] = toSim(mx, my);
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    baseScale *= zoomFactor;
+    baseScale = Math.max(0.005, Math.min(50, baseScale));
+
+    const defaultScale = Math.min(W, H) / 8;
+    scale = defaultScale * baseScale;
+    offsetX = mx - simX * scale;
+    offsetY = my + simY * scale;
+    panX = offsetX - W / 2;
+    panY = offsetY - H / 2;
+
+    updateZoomDisplay();
+}, { passive: false });
+
+overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+overlayCanvas.addEventListener('mousedown', (e) => {
+    const rect = overlayCanvas.getBoundingClientRect();
+    if (e.button === 2 || e.button === 1) {
+        isPanning = true;
+        panStartX = e.clientX - rect.left;
+        panStartY = e.clientY - rect.top;
+        overlayCanvas.style.cursor = 'grab';
+        return;
+    }
+    mouseStartX = e.clientX - rect.left;
+    mouseStartY = e.clientY - rect.top;
+    mouseCurrX = mouseStartX;
+    mouseCurrY = mouseStartY;
+    mouseDown = true;
+    document.getElementById('canvas-hint').style.opacity = '0';
+});
+
+overlayCanvas.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+        const rect = overlayCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        panX += mx - panStartX;
+        panY += my - panStartY;
+        panStartX = mx;
+        panStartY = my;
+        offsetX = W / 2 + panX;
+        offsetY = H / 2 + panY;
+        return;
+    }
+    if (!mouseDown) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    mouseCurrX = e.clientX - rect.left;
+    mouseCurrY = e.clientY - rect.top;
+});
+
+overlayCanvas.addEventListener('mouseup', (e) => {
+    if (isPanning) {
+        isPanning = false;
+        overlayCanvas.style.cursor = 'crosshair';
+        return;
+    }
+    if (!mouseDown) return;
+    mouseDown = false;
+
+    const rect = overlayCanvas.getBoundingClientRect();
+    const ex = e.clientX - rect.left;
+    const ey = e.clientY - rect.top;
+
+    const [px, py] = toSim(mouseStartX, mouseStartY);
+    const vScale = 2.0 / scale;
+    const vx = (ex - mouseStartX) * vScale;
+    const vy = -(ey - mouseStartY) * vScale;
+
+    const c = COLORS[colorIndex++ % COLORS.length];
+    sendAddBodyToWorker(px, py, vx, vy, placingMass, c);
+    E0 = null;
+});
+
+overlayCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = overlayCanvas.getBoundingClientRect();
+    mouseStartX = touch.clientX - rect.left;
+    mouseStartY = touch.clientY - rect.top;
+    mouseCurrX = mouseStartX;
+    mouseCurrY = mouseStartY;
+    mouseDown = true;
+    document.getElementById('canvas-hint').style.opacity = '0';
+}, { passive: false });
+
+overlayCanvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!mouseDown) return;
+    const touch = e.touches[0];
+    const rect = overlayCanvas.getBoundingClientRect();
+    mouseCurrX = touch.clientX - rect.left;
+    mouseCurrY = touch.clientY - rect.top;
+}, { passive: false });
+
+overlayCanvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (!mouseDown) return;
+    mouseDown = false;
+
+    const [px, py] = toSim(mouseStartX, mouseStartY);
+    const vScale = 2.0 / scale;
+    const vx = (mouseCurrX - mouseStartX) * vScale;
+    const vy = -(mouseCurrY - mouseStartY) * vScale;
+
+    const c = COLORS[colorIndex++ % COLORS.length];
+    sendAddBodyToWorker(px, py, vx, vy, placingMass, c);
+    E0 = null;
+}, { passive: false });
+
+// ─── Controls ─────────────────────────────────────────────────────
+const dtSlider = document.getElementById('dt-slider');
+const massSlider = document.getElementById('mass-slider');
+const trailSlider = document.getElementById('trail-slider');
+const substepSlider = document.getElementById('substep-slider');
+
+dtSlider.addEventListener('input', () => {
+    dt = Math.pow(10, parseFloat(dtSlider.value));
+    document.getElementById('dt-display').textContent = dt.toFixed(4);
+});
+
+massSlider.addEventListener('input', () => {
+    placingMass = Math.pow(10, parseFloat(massSlider.value));
+    document.getElementById('mass-display').textContent = placingMass.toFixed(1);
+});
+
+trailSlider.addEventListener('input', () => {
+    trailLength = parseInt(trailSlider.value);
+    document.getElementById('trail-display').textContent = trailLength;
+});
+
+substepSlider.addEventListener('input', () => {
+    substeps = parseInt(substepSlider.value);
+    document.getElementById('substep-display').textContent = substeps;
+});
+
+dt = Math.pow(10, parseFloat(dtSlider.value));
+document.getElementById('dt-display').textContent = dt.toFixed(4);
+
+const btnPlay = document.getElementById('btn-play');
+btnPlay.addEventListener('click', () => {
+    running = !running;
+    btnPlay.textContent = running ? '⏸ Pause' : '▶ Play';
+    btnPlay.className = running ? 'btn btn--danger' : 'btn btn--primary';
+    if (running && E0 === null && N >= 2 && currentEnergy !== undefined) E0 = currentEnergy;
+});
+
+document.getElementById('btn-step').addEventListener('click', () => {
+    if (N < 2 || workerBusy) return;
+    if (E0 === null && currentEnergy !== undefined) E0 = currentEnergy;
+    workerBusy = true;
+    worker.postMessage({ type: 'step', dt: dt, substeps: substeps });
+});
+
+document.getElementById('btn-reset-view').addEventListener('click', resetView);
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+    worker.postMessage({ type: 'clear' });
+    workerBusy = true;
+    N = 0; positions = new Float64Array(0); colors = new Float32Array(0);
+    masses = []; trails = [];
+    simTime = 0; E0 = null; currentEnergy = 0; colorIndex = 0;
+    running = false;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.className = 'btn btn--primary';
+    document.getElementById('canvas-hint').style.opacity = '1';
+});
+
+// ─── Presets ──────────────────────────────────────────────────────
+const presetBtns = document.querySelectorAll('.preset-btn');
+presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        loadPreset(btn.dataset.preset);
+        presetBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('canvas-hint').style.opacity = '0';
+    });
+});
+
+function loadPreset(name) {
+    let tmpBodies = [];
+    colorIndex = 0;
+
+    switch (name) {
+        case 'twobody': {
+            const d = 1.0, m = 1.0;
+            const v = Math.sqrt(G * m / (4.0 * d));
+            tmpBodies.push({ x: -d / 2, y: 0, vx: 0, vy: v, mass: m, color: COLORS[0] });
+            tmpBodies.push({ x: d / 2, y: 0, vx: 0, vy: -v, mass: m, color: COLORS[1] });
+            break;
         }
+        case 'figure8': {
+            tmpBodies.push({ x: 0.97000436, y: -0.24308753, vx: 0.46620368, vy: 0.43236573, mass: 1.0, color: COLORS[0] });
+            tmpBodies.push({ x: -0.97000436, y: 0.24308753, vx: 0.46620368, vy: 0.43236573, mass: 1.0, color: COLORS[1] });
+            tmpBodies.push({ x: 0, y: 0, vx: -0.93240737, vy: -0.86473146, mass: 1.0, color: COLORS[2] });
+            break;
+        }
+        case 'plummer': {
+            const N = 50, a = 1.0, totalMass = 10.0, mi = totalMass / N;
+            for (let i = 0; i < N; i++) {
+                let u = Math.random();
+                while (u < 1e-10) u = Math.random();
+                const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                const px = r * Math.sin(theta) * Math.cos(phi);
+                const py = r * Math.sin(theta) * Math.sin(phi);
 
-        function subdivide(node, bodies) {
-            const hs = node.halfSize * 0.5;
-            node.children = [
-                new QuadNode(node.cx - hs, node.cy + hs, hs), // NW
-                new QuadNode(node.cx + hs, node.cy + hs, hs), // NE
-                new QuadNode(node.cx - hs, node.cy - hs, hs), // SW
-                new QuadNode(node.cx + hs, node.cy - hs, hs), // SE
+                const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                let q, fq;
+                do {
+                    q = Math.random();
+                    fq = Math.random();
+                } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                const v = q * ve;
+                const vphi = 2 * Math.PI * Math.random();
+                const vcostheta = 2 * Math.random() - 1;
+                const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                const vxp = v * vsintheta * Math.cos(vphi);
+                const vyp = v * vsintheta * Math.sin(vphi);
+
+                tmpBodies.push({ x: px, y: py, vx: vxp, vy: vyp, mass: mi, color: COLORS[i % COLORS.length] });
+            }
+            centerOfMassCorrection(tmpBodies);
+            break;
+        }
+        case 'plummer100': {
+            const N = 100, a = 1.2, totalMass = 20.0, mi = totalMass / N;
+            for (let i = 0; i < N; i++) {
+                let u = Math.random();
+                while (u < 1e-10) u = Math.random();
+                const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                const px = r * Math.sin(theta) * Math.cos(phi);
+                const py = r * Math.sin(theta) * Math.sin(phi);
+
+                const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                let q, fq;
+                do {
+                    q = Math.random();
+                    fq = Math.random();
+                } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                const v = q * ve;
+                const vphi = 2 * Math.PI * Math.random();
+                const vcostheta = 2 * Math.random() - 1;
+                const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                const vxp = v * vsintheta * Math.cos(vphi);
+                const vyp = v * vsintheta * Math.sin(vphi);
+
+                tmpBodies.push({ x: px, y: py, vx: vxp, vy: vyp, mass: mi, color: COLORS[i % COLORS.length] });
+            }
+            centerOfMassCorrection(tmpBodies);
+            break;
+        }
+        case 'plummer1000': {
+            const N = 1000, a = 2.0, totalMass = 50.0, mi = totalMass / N;
+            for (let i = 0; i < N; i++) {
+                let u = Math.random();
+                while (u < 1e-10) u = Math.random();
+                const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                const px = r * Math.sin(theta) * Math.cos(phi);
+                const py = r * Math.sin(theta) * Math.sin(phi);
+
+                const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                let q, fq;
+                do {
+                    q = Math.random();
+                    fq = Math.random();
+                } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                const v = q * ve;
+                const vphi = 2 * Math.PI * Math.random();
+                const vcostheta = 2 * Math.random() - 1;
+                const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                const vxp = v * vsintheta * Math.cos(vphi);
+                const vyp = v * vsintheta * Math.sin(vphi);
+
+                tmpBodies.push({ x: px, y: py, vx: vxp, vy: vyp, mass: mi, color: COLORS[i % COLORS.length] });
+            }
+            centerOfMassCorrection(tmpBodies);
+
+            baseScale = 0.5; panX = 0; panY = 0; resizeCanvas(); updateZoomDisplay();
+            trailLength = 30; trailSlider.value = 30; document.getElementById('trail-display').textContent = '30';
+            substeps = 2; substepSlider.value = 2; document.getElementById('substep-display').textContent = '2';
+            break;
+        }
+        case 'plummer10k': {
+            const N = 10000, a = 3.0, totalMass = 100.0, mi = totalMass / N;
+            for (let i = 0; i < N; i++) {
+                let u = Math.random();
+                while (u < 1e-10) u = Math.random();
+                const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                const px = r * Math.sin(theta) * Math.cos(phi);
+                const py = r * Math.sin(theta) * Math.sin(phi);
+
+                const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                let q, fq;
+                do {
+                    q = Math.random();
+                    fq = Math.random();
+                } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                const v = q * ve;
+                const vphi = 2 * Math.PI * Math.random();
+                const vcostheta = 2 * Math.random() - 1;
+                const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                const vxp = v * vsintheta * Math.cos(vphi);
+                const vyp = v * vsintheta * Math.sin(vphi);
+
+                tmpBodies.push({ x: px, y: py, vx: vxp, vy: vyp, mass: mi, color: COLORS[i % COLORS.length] });
+            }
+            centerOfMassCorrection(tmpBodies);
+
+            baseScale = 0.25; panX = 0; panY = 0; resizeCanvas(); updateZoomDisplay();
+            trailLength = 0; trailSlider.value = 0; document.getElementById('trail-display').textContent = '0';
+            substeps = 1; substepSlider.value = 1; document.getElementById('substep-display').textContent = '1';
+            break;
+        }
+        case 'plummer100k': {
+            const N = 100000, a = 5.0, totalMass = 500.0, mi = totalMass / N;
+            for (let i = 0; i < N; i++) {
+                let u = Math.random();
+                while (u < 1e-10) u = Math.random();
+                const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                const px = r * Math.sin(theta) * Math.cos(phi);
+                const py = r * Math.sin(theta) * Math.sin(phi);
+
+                const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                let q, fq;
+                do {
+                    q = Math.random();
+                    fq = Math.random();
+                } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                const v = q * ve;
+                const vphi = 2 * Math.PI * Math.random();
+                const vcostheta = 2 * Math.random() - 1;
+                const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                const vxp = v * vsintheta * Math.cos(vphi);
+                const vyp = v * vsintheta * Math.sin(vphi);
+
+                tmpBodies.push({ x: px, y: py, vx: vxp, vy: vyp, mass: mi, color: COLORS[i % COLORS.length] });
+            }
+            centerOfMassCorrection(tmpBodies);
+
+            baseScale = 0.15; panX = 0; panY = 0; resizeCanvas(); updateZoomDisplay();
+            trailLength = 0; trailSlider.value = 0; document.getElementById('trail-display').textContent = '0';
+            substeps = 1; substepSlider.value = 1; document.getElementById('substep-display').textContent = '1';
+            break;
+        }
+        case 'solar': {
+            const sunMass = 100;
+            tmpBodies.push({ x: 0, y: 0, vx: 0, vy: 0, mass: sunMass, color: '#ffe66d' });
+
+            const planets = [
+                { r: 0.8, m: 0.1, color: '#a0a0a0' },
+                { r: 1.2, m: 0.3, color: '#fdcb6e' },
+                { r: 1.7, m: 0.4, color: '#4ecdc4' },
+                { r: 2.3, m: 0.2, color: '#ff6b6b' },
             ];
-            // Re-insert the existing body
-            if (node.bodyIndex >= 0) {
-                const oldIdx = node.bodyIndex;
-                node.bodyIndex = -1;
-                const q = getQuadrant(node, bodies[oldIdx].x, bodies[oldIdx].y);
-                insertBody(node.children[q], oldIdx, bodies);
+            for (const p of planets) {
+                const v = Math.sqrt(G * sunMass / p.r);
+                const angle = Math.random() * 2 * Math.PI;
+                tmpBodies.push({
+                    x: p.r * Math.cos(angle), y: p.r * Math.sin(angle),
+                    vx: -v * Math.sin(angle), vy: v * Math.cos(angle),
+                    mass: p.m, color: p.color
+                });
             }
+            break;
         }
+        case 'binary_star': {
+            const m1 = 10, m2 = 10, d = 1.5;
+            const vOrb = Math.sqrt(G * m2 / (4 * d));
+            tmpBodies.push({ x: -d / 2, y: 0, vx: 0, vy: vOrb, mass: m1, color: '#ff6b6b' });
+            tmpBodies.push({ x: d / 2, y: 0, vx: 0, vy: -vOrb, mass: m2, color: '#4ecdc4' });
 
-        function getQuadrant(node, x, y) {
-            if (x < node.cx) {
-                return y >= node.cy ? 0 : 2; // NW or SW
-            } else {
-                return y >= node.cy ? 1 : 3; // NE or SE
-            }
+            const rp = 3.5, mp = 0.1;
+            const vp = Math.sqrt(G * (m1 + m2) / rp);
+            tmpBodies.push({ x: rp, y: 0, vx: 0, vy: vp, mass: mp, color: '#ffe66d' });
+            break;
         }
-
-        function computeForceFromTree(node, bx, by, bm) {
-            if (node === null || node.count === 0) return [0, 0];
-
-            const dx = node.comX - bx;
-            const dy = node.comY - by;
-            const r2 = dx * dx + dy * dy + SOFTENING;
-
-            // If leaf with single body (and not self)
-            if (node.count === 1) {
-                if (r2 < SOFTENING * 2) return [0, 0]; // self-interaction guard
-                const rInv = 1.0 / Math.sqrt(r2);
-                const r3Inv = rInv * rInv * rInv;
-                return [G * node.mass * dx * r3Inv, G * node.mass * dy * r3Inv];
+        case 'lagrange': {
+            const m = 1.0;
+            const R = 1.0;
+            const omega = Math.sqrt(3 * G * m / (R * R * R));
+            for (let k = 0; k < 3; k++) {
+                const angle = (2 * Math.PI * k) / 3;
+                const px = R * Math.cos(angle);
+                const py = R * Math.sin(angle);
+                const vx = -omega * py;
+                const vy = omega * px;
+                tmpBodies.push({ x: px, y: py, vx: vx, vy: vy, mass: m, color: COLORS[k] });
             }
-
-            // Barnes-Hut criterion: s/d < theta
-            const s = node.halfSize * 2;
-            if (s * s < BH_THETA * BH_THETA * r2) {
-                // Treat as single mass
-                const rInv = 1.0 / Math.sqrt(r2);
-                const r3Inv = rInv * rInv * rInv;
-                return [G * node.mass * dx * r3Inv, G * node.mass * dy * r3Inv];
-            }
-
-            // Otherwise, recurse into children
-            let ax = 0, ay = 0;
-            for (let c = 0; c < 4; c++) {
-                const [fax, fay] = computeForceFromTree(node.children[c], bx, by, bm);
-                ax += fax;
-                ay += fay;
-            }
-            return [ax, ay];
+            break;
         }
+    }
 
-        // ─── Physics engine ───────────────────────────────────────────────
-        function computeForcesDirect() {
-            const n = bodies.length;
-            for (let i = 0; i < n; i++) {
-                bodies[i].ax = 0;
-                bodies[i].ay = 0;
-            }
-            for (let i = 0; i < n; i++) {
-                let axi = 0, ayi = 0;
-                for (let j = i + 1; j < n; j++) {
-                    const dx = bodies[j].x - bodies[i].x;
-                    const dy = bodies[j].y - bodies[i].y;
-                    const r2 = dx * dx + dy * dy + SOFTENING;
-                    const rInv = 1.0 / Math.sqrt(r2);
-                    const r3Inv = rInv * rInv * rInv;
-                    const fx = G * dx * r3Inv;
-                    const fy = G * dy * r3Inv;
-                    axi += bodies[j].mass * fx;
-                    ayi += bodies[j].mass * fy;
-                    bodies[j].ax -= bodies[i].mass * fx;
-                    bodies[j].ay -= bodies[i].mass * fy;
-                }
-                bodies[i].ax += axi;
-                bodies[i].ay += ayi;
-            }
+    E0 = null;
+    sendInitToWorker(tmpBodies);
+
+    running = true;
+    btnPlay.textContent = '⏸ Pause';
+    btnPlay.className = 'btn btn--danger';
+
+    const checkE0 = setInterval(() => {
+        if (!workerBusy && currentEnergy !== undefined) {
+            E0 = currentEnergy;
+            clearInterval(checkE0);
         }
-
-        function computeForcesBarnesHut() {
-            const tree = buildQuadtree(bodies);
-            const n = bodies.length;
-            for (let i = 0; i < n; i++) {
-                const [ax, ay] = computeForceFromTree(tree, bodies[i].x, bodies[i].y, bodies[i].mass);
-                bodies[i].ax = ax;
-                bodies[i].ay = ay;
-            }
-        }
-
-        function computeForces() {
-            if (bodies.length > BH_THRESHOLD) {
-                computeForcesBarnesHut();
-            } else {
-                computeForcesDirect();
-            }
-        }
-
-        function leapfrogStep(dt) {
-            const n = bodies.length;
-            const hdt = 0.5 * dt;
-            // Half kick
-            for (let i = 0; i < n; i++) {
-                bodies[i].vx += hdt * bodies[i].ax;
-                bodies[i].vy += hdt * bodies[i].ay;
-            }
-            // Drift
-            for (let i = 0; i < n; i++) {
-                bodies[i].x += dt * bodies[i].vx;
-                bodies[i].y += dt * bodies[i].vy;
-            }
-            // New forces
-            computeForces();
-            // Half kick
-            for (let i = 0; i < n; i++) {
-                bodies[i].vx += hdt * bodies[i].ax;
-                bodies[i].vy += hdt * bodies[i].ay;
-            }
-        }
-
-        function computeEnergy() {
-            let ke = 0, pe = 0;
-            const n = bodies.length;
-            for (let i = 0; i < n; i++) {
-                ke += 0.5 * bodies[i].mass * (bodies[i].vx ** 2 + bodies[i].vy ** 2);
-            }
-            // For large N, skip O(N²) PE — too expensive
-            if (n > 500) return ke;
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 1; j < n; j++) {
-                    const dx = bodies[j].x - bodies[i].x;
-                    const dy = bodies[j].y - bodies[i].y;
-                    const r = Math.sqrt(dx * dx + dy * dy + SOFTENING);
-                    pe -= G * bodies[i].mass * bodies[j].mass / r;
-                }
-            }
-            return ke + pe;
-        }
-
-        // ─── Recording trails ─────────────────────────────────────────────
-        function recordTrails() {
-            for (const b of bodies) {
-                b.trail.push({ x: b.x, y: b.y });
-                if (b.trail.length > trailLength) {
-                    b.trail.shift();
-                }
-            }
-        }
-
-        // ─── Rendering ────────────────────────────────────────────────────
-        function render() {
-            ctx.clearRect(0, 0, W, H);
-            const N = bodies.length;
-            const isLargeN = N > 500;
-            const isHugeN = N > 5000;
-
-            // Background grid (skip for huge N to save draw calls)
-            if (!isHugeN) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.025)';
-                ctx.lineWidth = 1;
-                const gridStep = scale;
-                for (let gx = offsetX % gridStep; gx < W; gx += gridStep) {
-                    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
-                }
-                for (let gy = offsetY % gridStep; gy < H; gy += gridStep) {
-                    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
-                }
-            }
-
-            // Center of mass
-            if (N > 0) {
-                let totalM = 0, comX = 0, comY = 0;
-                for (const b of bodies) {
-                    totalM += b.mass;
-                    comX += b.mass * b.x;
-                    comY += b.mass * b.y;
-                }
-                comX /= totalM; comY /= totalM;
-                const [scx, scy] = toScreen(comX, comY);
-                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(scx - 6, scy); ctx.lineTo(scx + 6, scy);
-                ctx.moveTo(scx, scy - 6); ctx.lineTo(scx, scy + 6);
-                ctx.stroke();
-            }
-
-            // Trails (skip for large N)
-            if (!isLargeN) {
-                for (const b of bodies) {
-                    if (b.trail.length < 2) continue;
-                    const n = b.trail.length;
-                    for (let i = 1; i < n; i++) {
-                        const alpha = (i / n) * 0.7;
-                        ctx.strokeStyle = hexToRGBA(b.color, alpha);
-                        ctx.lineWidth = 1.5;
-                        ctx.beginPath();
-                        const [x1, y1] = toScreen(b.trail[i - 1].x, b.trail[i - 1].y);
-                        const [x2, y2] = toScreen(b.trail[i].x, b.trail[i].y);
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                        ctx.stroke();
-                    }
-                }
-            }
-
-            // Bodies
-            if (isHugeN) {
-                // Ultra-fast batch rendering for 10K+ bodies: simple filled rects
-                for (const b of bodies) {
-                    const [sx, sy] = toScreen(b.x, b.y);
-                    if (sx < -5 || sx > W + 5 || sy < -5 || sy > H + 5) continue;
-                    ctx.fillStyle = b.color;
-                    ctx.fillRect(sx - 1, sy - 1, 2, 2);
-                }
-            } else if (isLargeN) {
-                // Fast rendering for 500-5000 bodies: small circles, no glow
-                for (const b of bodies) {
-                    const [sx, sy] = toScreen(b.x, b.y);
-                    if (sx < -10 || sx > W + 10 || sy < -10 || sy > H + 10) continue;
-                    ctx.fillStyle = b.color;
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, 2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            } else {
-                // Full quality rendering for small N
-                for (const b of bodies) {
-                    const [sx, sy] = toScreen(b.x, b.y);
-                    const radius = Math.max(3, Math.min(12, 4 * Math.cbrt(b.mass)));
-
-                    // Glow
-                    const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius * 4);
-                    grd.addColorStop(0, hexToRGBA(b.color, 0.25));
-                    grd.addColorStop(1, hexToRGBA(b.color, 0));
-                    ctx.fillStyle = grd;
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, radius * 4, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // Body
-                    ctx.fillStyle = b.color;
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // White edge
-                    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                    ctx.lineWidth = 0.8;
-                    ctx.stroke();
-                }
-            }
-
-            // Velocity arrow when placing
-            if (mouseDown) {
-                const [sx, sy] = [mouseStartX, mouseStartY];
-                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([4, 4]);
-                ctx.beginPath();
-                ctx.moveTo(sx, sy);
-                ctx.lineTo(mouseCurrX, mouseCurrY);
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Preview body
-                ctx.fillStyle = COLORS[colorIndex % COLORS.length];
-                ctx.globalAlpha = 0.5;
-                ctx.beginPath();
-                ctx.arc(sx, sy, Math.max(3, 4 * Math.cbrt(placingMass)), 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
-        }
-
-        function hexToRGBA(hex, alpha) {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r},${g},${b},${alpha})`;
-        }
-
-        // ─── UI Updates ───────────────────────────────────────────────────
-        function updateStats() {
-            document.getElementById('stat-bodies').textContent = bodies.length;
-            document.getElementById('stat-time').textContent = simTime.toFixed(3);
-            document.getElementById('canvas-overlay').textContent = `t = ${simTime.toFixed(3)}`;
-
-            if (bodies.length >= 2) {
-                const E = computeEnergy();
-                document.getElementById('stat-energy').textContent = E.toExponential(4);
-
-                if (E0 !== null && E0 !== 0) {
-                    const dE = Math.abs((E - E0) / E0);
-                    const el = document.getElementById('stat-derror');
-                    el.textContent = dE.toExponential(2);
-                    el.className = 'stat-value ' + (dE < 1e-6 ? 'good' : dE < 1e-3 ? 'warn' : 'bad');
-                }
-            } else {
-                document.getElementById('stat-energy').textContent = '—';
-                document.getElementById('stat-derror').textContent = '—';
-                document.getElementById('stat-derror').className = 'stat-value';
-            }
-
-            document.getElementById('stat-fps').textContent = Math.round(currentFps);
-        }
-
-        // ─── Main loop ────────────────────────────────────────────────────
-        function loop() {
-            if (running && bodies.length >= 2) {
-                for (let s = 0; s < substeps; s++) {
-                    leapfrogStep(dt);
-                    simTime += dt;
-                }
-                recordTrails();
-            }
-
-            render();
-            updateStats();
-
-            // FPS
-            frameCount++;
-            const now = performance.now();
-            if (now - lastFpsTime > 500) {
-                currentFps = frameCount / ((now - lastFpsTime) / 1000);
-                frameCount = 0;
-                lastFpsTime = now;
-            }
-
-            requestAnimationFrame(loop);
-        }
-
-        // ─── Mouse events ─────────────────────────────────────────────────
-        // ─── Zoom (mouse wheel) ────────────────────────────────────────
-        canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-
-            // Zoom towards cursor position
-            const [simX, simY] = toSim(mx, my);
-            const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-            baseScale *= zoomFactor;
-            baseScale = Math.max(0.05, Math.min(50, baseScale));
-
-            // Recalculate scale and offset
-            const defaultScale = Math.min(W, H) / 8;
-            scale = defaultScale * baseScale;
-            // Adjust pan so the point under the cursor stays fixed
-            offsetX = mx - simX * scale;
-            offsetY = my + simY * scale;
-            panX = offsetX - W / 2;
-            panY = offsetY - H / 2;
-
-            updateZoomDisplay();
-        }, { passive: false });
-
-        // ─── Pan (right-click drag) ───────────────────────────────────────
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            // Right-click or middle-click = pan
-            if (e.button === 2 || e.button === 1) {
-                isPanning = true;
-                panStartX = e.clientX - rect.left;
-                panStartY = e.clientY - rect.top;
-                canvas.style.cursor = 'grab';
-                return;
-            }
-            mouseStartX = e.clientX - rect.left;
-            mouseStartY = e.clientY - rect.top;
-            mouseCurrX = mouseStartX;
-            mouseCurrY = mouseStartY;
-            mouseDown = true;
-            document.getElementById('canvas-hint').style.opacity = '0';
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (isPanning) {
-                const rect = canvas.getBoundingClientRect();
-                const mx = e.clientX - rect.left;
-                const my = e.clientY - rect.top;
-                panX += mx - panStartX;
-                panY += my - panStartY;
-                panStartX = mx;
-                panStartY = my;
-                offsetX = W / 2 + panX;
-                offsetY = H / 2 + panY;
-                return;
-            }
-            if (!mouseDown) return;
-            const rect = canvas.getBoundingClientRect();
-            mouseCurrX = e.clientX - rect.left;
-            mouseCurrY = e.clientY - rect.top;
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-            if (isPanning) {
-                isPanning = false;
-                canvas.style.cursor = 'crosshair';
-                return;
-            }
-
-            if (!mouseDown) return;
-            mouseDown = false;
-
-            const rect = canvas.getBoundingClientRect();
-            const ex = e.clientX - rect.left;
-            const ey = e.clientY - rect.top;
-
-            const [px, py] = toSim(mouseStartX, mouseStartY);
-            // Velocity from drag (scaled down)
-            const vScale = 2.0 / scale;
-            const vx = (ex - mouseStartX) * vScale;
-            const vy = -(ey - mouseStartY) * vScale;
-
-            bodies.push(new Body(px, py, vx, vy, placingMass));
-
-            // Reset E0 when adding bodies
-            computeForces();
-            E0 = computeEnergy();
-        });
-
-        // ─── Touch events ─────────────────────────────────────────────────
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseStartX = touch.clientX - rect.left;
-            mouseStartY = touch.clientY - rect.top;
-            mouseCurrX = mouseStartX;
-            mouseCurrY = mouseStartY;
-            mouseDown = true;
-            document.getElementById('canvas-hint').style.opacity = '0';
-        }, { passive: false });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (!mouseDown) return;
-            const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            mouseCurrX = touch.clientX - rect.left;
-            mouseCurrY = touch.clientY - rect.top;
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (!mouseDown) return;
-            mouseDown = false;
-
-            const [px, py] = toSim(mouseStartX, mouseStartY);
-            const vScale = 2.0 / scale;
-            const vx = (mouseCurrX - mouseStartX) * vScale;
-            const vy = -(mouseCurrY - mouseStartY) * vScale;
-
-            bodies.push(new Body(px, py, vx, vy, placingMass));
-            computeForces();
-            E0 = computeEnergy();
-        }, { passive: false });
-
-        // ─── Controls ─────────────────────────────────────────────────────
-        const dtSlider = document.getElementById('dt-slider');
-        const massSlider = document.getElementById('mass-slider');
-        const trailSlider = document.getElementById('trail-slider');
-        const substepSlider = document.getElementById('substep-slider');
-
-        dtSlider.addEventListener('input', () => {
-            dt = Math.pow(10, parseFloat(dtSlider.value));
-            document.getElementById('dt-display').textContent = dt.toFixed(4);
-        });
-
-        massSlider.addEventListener('input', () => {
-            placingMass = Math.pow(10, parseFloat(massSlider.value));
-            document.getElementById('mass-display').textContent = placingMass.toFixed(1);
-        });
-
-        trailSlider.addEventListener('input', () => {
-            trailLength = parseInt(trailSlider.value);
-            document.getElementById('trail-display').textContent = trailLength;
-        });
-
-        substepSlider.addEventListener('input', () => {
-            substeps = parseInt(substepSlider.value);
-            document.getElementById('substep-display').textContent = substeps;
-        });
-
-        // Initialize slider displays
-        dt = Math.pow(10, parseFloat(dtSlider.value));
-        document.getElementById('dt-display').textContent = dt.toFixed(4);
-
-        // Play / Pause
-        const btnPlay = document.getElementById('btn-play');
-        btnPlay.addEventListener('click', () => {
-            running = !running;
-            btnPlay.textContent = running ? '⏸ Pause' : '▶ Play';
-            btnPlay.className = running ? 'btn btn--danger' : 'btn btn--primary';
-
-            if (running && E0 === null && bodies.length >= 2) {
-                computeForces();
-                E0 = computeEnergy();
-            }
-        });
-
-        // Step
-        document.getElementById('btn-step').addEventListener('click', () => {
-            if (bodies.length < 2) return;
-            if (E0 === null) {
-                computeForces();
-                E0 = computeEnergy();
-            }
-            for (let s = 0; s < substeps; s++) {
-                leapfrogStep(dt);
-                simTime += dt;
-            }
-            recordTrails();
-        });
-
-        // Clear
-        // Reset View
-        document.getElementById('btn-reset-view').addEventListener('click', resetView);
-
-        document.getElementById('btn-clear').addEventListener('click', () => {
-            bodies = [];
-            simTime = 0;
-            E0 = null;
-            colorIndex = 0;
-            running = false;
-            btnPlay.textContent = '▶ Play';
-            btnPlay.className = 'btn btn--primary';
-            document.getElementById('canvas-hint').style.opacity = '1';
-        });
-
-        // ─── Presets ──────────────────────────────────────────────────────
-        const presetBtns = document.querySelectorAll('.preset-btn');
-        presetBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const preset = btn.dataset.preset;
-                loadPreset(preset);
-
-                presetBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById('canvas-hint').style.opacity = '0';
-            });
-        });
-
-        function loadPreset(name) {
-            bodies = [];
-            simTime = 0;
-            E0 = null;
-            colorIndex = 0;
-
-            switch (name) {
-                case 'twobody': {
-                    const d = 1.0, m = 1.0;
-                    const v = Math.sqrt(G * m / (4.0 * d));
-                    bodies.push(new Body(-d / 2, 0, 0, v, m));
-                    bodies.push(new Body(d / 2, 0, 0, -v, m));
-                    break;
-                }
-                case 'figure8': {
-                    bodies.push(new Body(0.97000436, -0.24308753, 0.46620368, 0.43236573, 1.0));
-                    bodies.push(new Body(-0.97000436, 0.24308753, 0.46620368, 0.43236573, 1.0));
-                    bodies.push(new Body(0, 0, -0.93240737, -0.86473146, 1.0));
-                    break;
-                }
-                case 'plummer': {
-                    const N = 50, a = 1.0, totalMass = 10.0, mi = totalMass / N;
-                    for (let i = 0; i < N; i++) {
-                        let u = Math.random();
-                        while (u < 1e-10) u = Math.random();
-                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
-                        const theta = Math.acos(2 * Math.random() - 1);
-                        const phi = 2 * Math.PI * Math.random();
-                        const px = r * Math.sin(theta) * Math.cos(phi);
-                        const py = r * Math.sin(theta) * Math.sin(phi);
-
-                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
-                        let q, fq;
-                        do {
-                            q = Math.random();
-                            fq = Math.random();
-                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
-                        const v = q * ve;
-                        const vphi = 2 * Math.PI * Math.random();
-                        const vcostheta = 2 * Math.random() - 1;
-                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
-                        const vxp = v * vsintheta * Math.cos(vphi);
-                        const vyp = v * vsintheta * Math.sin(vphi);
-
-                        bodies.push(new Body(px, py, vxp, vyp, mi));
-                    }
-                    // Center-of-mass correction
-                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
-                    for (const b of bodies) {
-                        M += b.mass;
-                        cx += b.mass * b.x; cy += b.mass * b.y;
-                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
-                    }
-                    cx /= M; cy /= M; cvx /= M; cvy /= M;
-                    for (const b of bodies) {
-                        b.x -= cx; b.y -= cy;
-                        b.vx -= cvx; b.vy -= cvy;
-                    }
-                    break;
-                }
-                case 'plummer100': {
-                    const N = 100, a = 1.2, totalMass = 20.0, mi = totalMass / N;
-                    for (let i = 0; i < N; i++) {
-                        let u = Math.random();
-                        while (u < 1e-10) u = Math.random();
-                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
-                        const theta = Math.acos(2 * Math.random() - 1);
-                        const phi = 2 * Math.PI * Math.random();
-                        const px = r * Math.sin(theta) * Math.cos(phi);
-                        const py = r * Math.sin(theta) * Math.sin(phi);
-
-                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
-                        let q, fq;
-                        do {
-                            q = Math.random();
-                            fq = Math.random();
-                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
-                        const v = q * ve;
-                        const vphi = 2 * Math.PI * Math.random();
-                        const vcostheta = 2 * Math.random() - 1;
-                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
-                        const vxp = v * vsintheta * Math.cos(vphi);
-                        const vyp = v * vsintheta * Math.sin(vphi);
-
-                        bodies.push(new Body(px, py, vxp, vyp, mi));
-                    }
-                    // Center-of-mass correction
-                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
-                    for (const b of bodies) {
-                        M += b.mass;
-                        cx += b.mass * b.x; cy += b.mass * b.y;
-                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
-                    }
-                    cx /= M; cy /= M; cvx /= M; cvy /= M;
-                    for (const b of bodies) {
-                        b.x -= cx; b.y -= cy;
-                        b.vx -= cvx; b.vy -= cvy;
-                    }
-                    break;
-                }
-                case 'plummer1000': {
-                    const N = 1000, a = 2.0, totalMass = 50.0, mi = totalMass / N;
-                    for (let i = 0; i < N; i++) {
-                        let u = Math.random();
-                        while (u < 1e-10) u = Math.random();
-                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
-                        const theta = Math.acos(2 * Math.random() - 1);
-                        const phi = 2 * Math.PI * Math.random();
-                        const px = r * Math.sin(theta) * Math.cos(phi);
-                        const py = r * Math.sin(theta) * Math.sin(phi);
-
-                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
-                        let q, fq;
-                        do {
-                            q = Math.random();
-                            fq = Math.random();
-                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
-                        const v = q * ve;
-                        const vphi = 2 * Math.PI * Math.random();
-                        const vcostheta = 2 * Math.random() - 1;
-                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
-                        const vxp = v * vsintheta * Math.cos(vphi);
-                        const vyp = v * vsintheta * Math.sin(vphi);
-
-                        bodies.push(new Body(px, py, vxp, vyp, mi, COLORS[i % COLORS.length]));
-                    }
-                    // Center-of-mass correction
-                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
-                    for (const b of bodies) {
-                        M += b.mass;
-                        cx += b.mass * b.x; cy += b.mass * b.y;
-                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
-                    }
-                    cx /= M; cy /= M; cvx /= M; cvy /= M;
-                    for (const b of bodies) {
-                        b.x -= cx; b.y -= cy;
-                        b.vx -= cvx; b.vy -= cvy;
-                    }
-                    // Auto-adjust: zoom out, reduce trails for performance
-                    baseScale = 0.5;
-                    panX = 0; panY = 0;
-                    resizeCanvas();
-                    updateZoomDisplay();
-                    trailLength = 30;
-                    trailSlider.value = 30;
-                    document.getElementById('trail-display').textContent = '30';
-                    substeps = 2;
-                    substepSlider.value = 2;
-                    document.getElementById('substep-display').textContent = '2';
-                    break;
-                }
-                case 'plummer10k': {
-                    const N = 10000, a = 3.0, totalMass = 100.0, mi = totalMass / N;
-                    for (let i = 0; i < N; i++) {
-                        let u = Math.random();
-                        while (u < 1e-10) u = Math.random();
-                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
-                        const theta = Math.acos(2 * Math.random() - 1);
-                        const phi = 2 * Math.PI * Math.random();
-                        const px = r * Math.sin(theta) * Math.cos(phi);
-                        const py = r * Math.sin(theta) * Math.sin(phi);
-
-                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
-                        let q, fq;
-                        do {
-                            q = Math.random();
-                            fq = Math.random();
-                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
-                        const v = q * ve;
-                        const vphi = 2 * Math.PI * Math.random();
-                        const vcostheta = 2 * Math.random() - 1;
-                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
-                        const vxp = v * vsintheta * Math.cos(vphi);
-                        const vyp = v * vsintheta * Math.sin(vphi);
-
-                        bodies.push(new Body(px, py, vxp, vyp, mi, COLORS[i % COLORS.length]));
-                    }
-                    // Center-of-mass correction
-                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
-                    for (const b of bodies) {
-                        M += b.mass;
-                        cx += b.mass * b.x; cy += b.mass * b.y;
-                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
-                    }
-                    cx /= M; cy /= M; cvx /= M; cvy /= M;
-                    for (const b of bodies) {
-                        b.x -= cx; b.y -= cy;
-                        b.vx -= cvx; b.vy -= cvy;
-                    }
-                    baseScale = 0.25;
-                    panX = 0; panY = 0;
-                    resizeCanvas();
-                    updateZoomDisplay();
-                    trailLength = 0;
-                    trailSlider.value = 0;
-                    document.getElementById('trail-display').textContent = '0';
-                    substeps = 1;
-                    substepSlider.value = 1;
-                    document.getElementById('substep-display').textContent = '1';
-                    break;
-                }
-                case 'plummer100k': {
-                    const N = 100000, a = 5.0, totalMass = 500.0, mi = totalMass / N;
-                    for (let i = 0; i < N; i++) {
-                        let u = Math.random();
-                        while (u < 1e-10) u = Math.random();
-                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
-                        const theta = Math.acos(2 * Math.random() - 1);
-                        const phi = 2 * Math.PI * Math.random();
-                        const px = r * Math.sin(theta) * Math.cos(phi);
-                        const py = r * Math.sin(theta) * Math.sin(phi);
-
-                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
-                        let q, fq;
-                        do {
-                            q = Math.random();
-                            fq = Math.random();
-                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
-                        const v = q * ve;
-                        const vphi = 2 * Math.PI * Math.random();
-                        const vcostheta = 2 * Math.random() - 1;
-                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
-                        const vxp = v * vsintheta * Math.cos(vphi);
-                        const vyp = v * vsintheta * Math.sin(vphi);
-
-                        bodies.push(new Body(px, py, vxp, vyp, mi, COLORS[i % COLORS.length]));
-                    }
-                    // Center-of-mass correction
-                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
-                    for (const b of bodies) {
-                        M += b.mass;
-                        cx += b.mass * b.x; cy += b.mass * b.y;
-                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
-                    }
-                    cx /= M; cy /= M; cvx /= M; cvy /= M;
-                    for (const b of bodies) {
-                        b.x -= cx; b.y -= cy;
-                        b.vx -= cvx; b.vy -= cvy;
-                    }
-                    baseScale = 0.15;
-                    panX = 0; panY = 0;
-                    resizeCanvas();
-                    updateZoomDisplay();
-                    trailLength = 0;
-                    trailSlider.value = 0;
-                    document.getElementById('trail-display').textContent = '0';
-                    substeps = 1;
-                    substepSlider.value = 1;
-                    document.getElementById('substep-display').textContent = '1';
-                    break;
-                }
-                case 'solar': {
-                    // Simplified solar system (Sun + 4 inner planets, scaled)
-                    const sunMass = 100;
-                    bodies.push(new Body(0, 0, 0, 0, sunMass, '#ffe66d'));
-
-                    const planets = [
-                        { r: 0.8, m: 0.1, color: '#a0a0a0' },  // Mercury
-                        { r: 1.2, m: 0.3, color: '#fdcb6e' },  // Venus
-                        { r: 1.7, m: 0.4, color: '#4ecdc4' },  // Earth
-                        { r: 2.3, m: 0.2, color: '#ff6b6b' },  // Mars
-                    ];
-                    for (const p of planets) {
-                        const v = Math.sqrt(G * sunMass / p.r);
-                        const angle = Math.random() * 2 * Math.PI;
-                        bodies.push(new Body(
-                            p.r * Math.cos(angle), p.r * Math.sin(angle),
-                            -v * Math.sin(angle), v * Math.cos(angle),
-                            p.m, p.color
-                        ));
-                    }
-                    break;
-                }
-                case 'binary_star': {
-                    // Binary star with a planet
-                    const m1 = 10, m2 = 10, d = 1.5;
-                    const vOrb = Math.sqrt(G * m2 / (4 * d));
-                    bodies.push(new Body(-d / 2, 0, 0, vOrb, m1, '#ff6b6b'));
-                    bodies.push(new Body(d / 2, 0, 0, -vOrb, m2, '#4ecdc4'));
-
-                    // Circumbinary planet
-                    const rp = 3.5, mp = 0.1;
-                    const vp = Math.sqrt(G * (m1 + m2) / rp);
-                    bodies.push(new Body(rp, 0, 0, vp, mp, '#ffe66d'));
-                    break;
-                }
-                case 'lagrange': {
-                    // Equilateral triangle (Lagrange configuration)
-                    const m = 1.0;
-                    const R = 1.0;
-                    // Three bodies at vertices of equilateral triangle
-                    // rotating at angular velocity omega = sqrt(3*G*m / R^3)
-                    const omega = Math.sqrt(3 * G * m / (R * R * R));
-                    for (let k = 0; k < 3; k++) {
-                        const angle = (2 * Math.PI * k) / 3;
-                        const px = R * Math.cos(angle);
-                        const py = R * Math.sin(angle);
-                        const vx = -omega * py;
-                        const vy = omega * px;
-                        bodies.push(new Body(px, py, vx, vy, m));
-                    }
-                    break;
-                }
-            }
-
-            computeForces();
-            E0 = computeEnergy();
-            running = true;
-            btnPlay.textContent = '⏸ Pause';
-            btnPlay.className = 'btn btn--danger';
-        }
-
-        // ─── Start ────────────────────────────────────────────────────────
-        requestAnimationFrame(loop);
+    }, 50);
+}
+
+function centerOfMassCorrection(bList) {
+    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
+    for (const b of bList) {
+        M += b.mass;
+        cx += b.mass * b.x; cy += b.mass * b.y;
+        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
+    }
+    cx /= M; cy /= M; cvx /= M; cvy /= M;
+    for (const b of bList) {
+        b.x -= cx; b.y -= cy;
+        b.vx -= cvx; b.vy -= cvy;
+    }
+}
+
+// ─── Start ────────────────────────────────────────────────────────
+requestAnimationFrame(loop);
 
     </script>
 </body>
