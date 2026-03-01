@@ -1,0 +1,26 @@
+name: Deploy Branch to GitHub Pages
+
+on:
+  push:
+    branches:
+      - 'feature/nbody-webgl-worker'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Deploy the contents of the branch to the 'gh-pages' branch
+      # The target-folder ensures it doesn't overwrite the main site, 
+      # but rather lives at /gunjanlakhlani.github.io/feature-nbody/
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: .
+          target-folder: feature-nbody
