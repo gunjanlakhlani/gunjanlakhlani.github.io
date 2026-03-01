@@ -1,0 +1,208 @@
+// =============================================
+// Layout
+// =============================================
+
+.container {
+    max-width: $max-width;
+    margin: 0 auto;
+    padding: 0 $sp-xl;
+    position: relative;
+    z-index: 1;
+
+    @media (max-width: $bp-sm) {
+        padding: 0 $sp-lg;
+    }
+}
+
+.page-content {
+    min-height: 100vh;
+    padding-top: $nav-height;
+}
+
+// =============================================
+// Hero — Centered profile card like reference
+// =============================================
+
+.hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - #{$nav-height});
+    text-align: center;
+    padding: $sp-3xl $sp-xl;
+}
+
+.hero__inner {
+    max-width: 480px;
+    width: 100%;
+}
+
+.hero__photo {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto $sp-2xl;
+    border: 2px solid $border-color;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.1s forwards;
+
+    @media (max-width: $bp-sm) {
+        width: 130px;
+        height: 130px;
+    }
+}
+
+.hero__name {
+    font-size: $fs-2xl;
+    font-weight: $fw-bold;
+    margin-bottom: $sp-sm;
+    letter-spacing: -0.02em;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.2s forwards;
+
+    @media (max-width: $bp-sm) {
+        font-size: $fs-xl;
+    }
+}
+
+.hero__title {
+    font-family: $font-mono;
+    font-size: $fs-sm;
+    color: $text-muted;
+    letter-spacing: 0.03em;
+    margin-bottom: $sp-2xl;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.3s forwards;
+}
+
+.hero__bio {
+    font-size: $fs-sm;
+    color: $text-secondary;
+    line-height: 1.75;
+    margin-bottom: $sp-md;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.4s forwards;
+
+    &:last-of-type {
+        margin-bottom: $sp-2xl;
+    }
+}
+
+// Pull quote
+.hero__quote {
+    font-size: $fs-sm;
+    font-style: italic;
+    color: $text-muted;
+    border: none;
+    padding: 0;
+    margin: 0 0 $sp-lg;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.35s forwards;
+    background: none;
+
+    cite {
+        display: block;
+        font-style: normal;
+        font-family: $font-mono;
+        font-size: $fs-xs;
+        color: rgba($text-muted, 0.7);
+        margin-top: $sp-xs;
+        letter-spacing: 0.03em;
+    }
+}
+
+// Ghost buttons like the reference site
+.hero__links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $sp-md;
+    margin-bottom: $sp-2xl;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.5s forwards;
+
+    @media (max-width: $bp-sm) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.hero__link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $sp-sm;
+    padding: $sp-md $sp-lg;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+    color: $text-primary;
+    font-family: $font-mono;
+    font-size: $fs-sm;
+    font-weight: $fw-medium;
+    transition: all $tr-base;
+    background: transparent;
+
+    svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
+    &:hover {
+        background: $text-primary;
+        color: $bg-primary;
+        border-color: $text-primary;
+    }
+}
+
+.hero__link--full {
+    grid-column: 1 / -1;
+}
+
+// Divider
+.hero__divider {
+    width: 40px;
+    height: 1px;
+    background: $border-color;
+    margin: 0 auto $sp-2xl;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.6s forwards;
+}
+
+// Latest posts preview on homepage
+.hero__posts-label {
+    font-family: $font-mono;
+    font-size: $fs-xs;
+    color: $text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: $sp-lg;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.65s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// =============================================
+// Sections
+// =============================================
+
+.section {
+    padding: $sp-4xl 0;
+}
+
+.section__title {
+    font-size: $fs-xl;
+    font-weight: $fw-bold;
+    margin-bottom: $sp-2xl;
+    letter-spacing: -0.02em;
+}
