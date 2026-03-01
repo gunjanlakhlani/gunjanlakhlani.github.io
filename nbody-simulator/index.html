@@ -423,6 +423,10 @@
                         <span class="preset-icon">✦✦</span>
                         Cluster (100)
                     </button>
+                    <button class="preset-btn" data-preset="plummer1000">
+                        <span class="preset-icon">⁂</span>
+                        Cluster (1000)
+                    </button>
                     <button class="preset-btn" data-preset="solar">
                         <span class="preset-icon">☉</span>
                         Solar System
@@ -469,6 +473,7 @@
                 <div class="actions">
                     <button class="btn btn--primary" id="btn-play">▶ Play</button>
                     <button class="btn" id="btn-step">⏭ Step</button>
+                    <button class="btn" id="btn-reset-view">⊞ Reset View</button>
                     <button class="btn btn--danger" id="btn-clear">✕ Clear</button>
                 </div>
             </div>
@@ -506,6 +511,8 @@
                     <p><code>Click + Drag</code> to set initial velocity</p>
                     <p>Use presets for classic configurations</p>
                     <p>Adjust mass slider before placing bodies</p>
+                    <p><code>Scroll</code> to zoom in/out</p>
+                    <p><code>Right-click + Drag</code> to pan the view</p>
                 </div>
             </div>
         </aside>
@@ -514,7 +521,9 @@
         <div class="canvas-wrap">
             <canvas id="sim-canvas"></canvas>
             <div class="canvas-overlay" id="canvas-overlay">t = 0.000</div>
-            <div class="canvas-hint" id="canvas-hint">Click anywhere to place a body — drag to set velocity</div>
+            <div class="canvas-overlay" id="zoom-overlay" style="top: auto; bottom: 1rem; right: 1rem;">1.0×</div>
+            <div class="canvas-hint" id="canvas-hint">Click anywhere to place a body — drag to set velocity
+                &nbsp;|&nbsp; Scroll to zoom</div>
         </div>
     </div>
 
@@ -551,6 +560,14 @@
         let mouseStartX = 0, mouseStartY = 0;
         let mouseCurrX = 0, mouseCurrY = 0;
 
+        // Pan interaction
+        let isPanning = false;
+        let panStartX = 0, panStartY = 0;
+
+        // Zoom state
+        let baseScale = 1.0; // multiplier on top of default scale
+        let panX = 0, panY = 0; // pan offset in screen pixels
+
         // FPS tracking
         let frameCount = 0;
         let lastFpsTime = performance.now();
@@ -573,9 +590,22 @@
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             // Coordinate system: [-range, range] in both axes, centered
-            scale = Math.min(W, H) / 8;
-            offsetX = W / 2;
-            offsetY = H / 2;
+            const defaultScale = Math.min(W, H) / 8;
+            scale = defaultScale * baseScale;
+            offsetX = W / 2 + panX;
+            offsetY = H / 2 + panY;
+        }
+
+        function resetView() {
+            baseScale = 1.0;
+            panX = 0;
+            panY = 0;
+            resizeCanvas();
+            updateZoomDisplay();
+        }
+
+        function updateZoomDisplay() {
+            document.getElementById('zoom-overlay').textContent = baseScale.toFixed(1) + '×';
         }
 
         function toScreen(x, y) {
@@ -833,8 +863,44 @@
         }
 
         // ─── Mouse events ─────────────────────────────────────────────────
+        // ─── Zoom (mouse wheel) ────────────────────────────────────────
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            // Zoom towards cursor position
+            const [simX, simY] = toSim(mx, my);
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+            baseScale *= zoomFactor;
+            baseScale = Math.max(0.05, Math.min(50, baseScale));
+
+            // Recalculate scale and offset
+            const defaultScale = Math.min(W, H) / 8;
+            scale = defaultScale * baseScale;
+            // Adjust pan so the point under the cursor stays fixed
+            offsetX = mx - simX * scale;
+            offsetY = my + simY * scale;
+            panX = offsetX - W / 2;
+            panY = offsetY - H / 2;
+
+            updateZoomDisplay();
+        }, { passive: false });
+
+        // ─── Pan (right-click drag) ───────────────────────────────────────
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
+            // Right-click or middle-click = pan
+            if (e.button === 2 || e.button === 1) {
+                isPanning = true;
+                panStartX = e.clientX - rect.left;
+                panStartY = e.clientY - rect.top;
+                canvas.style.cursor = 'grab';
+                return;
+            }
             mouseStartX = e.clientX - rect.left;
             mouseStartY = e.clientY - rect.top;
             mouseCurrX = mouseStartX;
@@ -844,6 +910,18 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                panX += mx - panStartX;
+                panY += my - panStartY;
+                panStartX = mx;
+                panStartY = my;
+                offsetX = W / 2 + panX;
+                offsetY = H / 2 + panY;
+                return;
+            }
             if (!mouseDown) return;
             const rect = canvas.getBoundingClientRect();
             mouseCurrX = e.clientX - rect.left;
@@ -851,6 +929,12 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
+            if (isPanning) {
+                isPanning = false;
+                canvas.style.cursor = 'crosshair';
+                return;
+            }
+
             if (!mouseDown) return;
             mouseDown = false;
 
@@ -966,6 +1050,9 @@
         });
 
         // Clear
+        // Reset View
+        document.getElementById('btn-reset-view').addEventListener('click', resetView);
+
         document.getElementById('btn-clear').addEventListener('click', () => {
             bodies = [];
             simTime = 0;
@@ -1088,6 +1175,57 @@
                         b.x -= cx; b.y -= cy;
                         b.vx -= cvx; b.vy -= cvy;
                     }
+                    break;
+                }
+                case 'plummer1000': {
+                    const N = 1000, a = 2.0, totalMass = 50.0, mi = totalMass / N;
+                    for (let i = 0; i < N; i++) {
+                        let u = Math.random();
+                        while (u < 1e-10) u = Math.random();
+                        const r = a / Math.sqrt(Math.pow(u, -2 / 3) - 1);
+                        const theta = Math.acos(2 * Math.random() - 1);
+                        const phi = 2 * Math.PI * Math.random();
+                        const px = r * Math.sin(theta) * Math.cos(phi);
+                        const py = r * Math.sin(theta) * Math.sin(phi);
+
+                        const ve = Math.sqrt(2 * totalMass / Math.sqrt(r * r + a * a));
+                        let q, fq;
+                        do {
+                            q = Math.random();
+                            fq = Math.random();
+                        } while (fq > q * q * Math.pow(1 - q * q, 3.5));
+                        const v = q * ve;
+                        const vphi = 2 * Math.PI * Math.random();
+                        const vcostheta = 2 * Math.random() - 1;
+                        const vsintheta = Math.sqrt(1 - vcostheta * vcostheta);
+                        const vxp = v * vsintheta * Math.cos(vphi);
+                        const vyp = v * vsintheta * Math.sin(vphi);
+
+                        bodies.push(new Body(px, py, vxp, vyp, mi, COLORS[i % COLORS.length]));
+                    }
+                    // Center-of-mass correction
+                    let cx = 0, cy = 0, cvx = 0, cvy = 0, M = 0;
+                    for (const b of bodies) {
+                        M += b.mass;
+                        cx += b.mass * b.x; cy += b.mass * b.y;
+                        cvx += b.mass * b.vx; cvy += b.mass * b.vy;
+                    }
+                    cx /= M; cy /= M; cvx /= M; cvy /= M;
+                    for (const b of bodies) {
+                        b.x -= cx; b.y -= cy;
+                        b.vx -= cvx; b.vy -= cvy;
+                    }
+                    // Auto-adjust: zoom out, reduce trails for performance
+                    baseScale = 0.5;
+                    panX = 0; panY = 0;
+                    resizeCanvas();
+                    updateZoomDisplay();
+                    trailLength = 30;
+                    trailSlider.value = 30;
+                    document.getElementById('trail-display').textContent = '30';
+                    substeps = 2;
+                    substepSlider.value = 2;
+                    document.getElementById('substep-display').textContent = '2';
                     break;
                 }
                 case 'solar': {
