@@ -14,31 +14,31 @@ In this post, I'll walk through how I built a gravitational N-body solver in C �
 
 ## 1 &nbsp; The N-Body Problem
 
-The setup is deceptively simple. You have $N$ point masses, each feeling the gravitational pull of every other mass.
+The setup is deceptively simple. You have \(N\) point masses, each feeling the gravitational pull of every other mass.
 
-Newton tells us the force on body $i$ due to body $j$:
+Newton tells us the force on body \(i\) due to body \(j\):
 
 $$\mathbf{F}_{ij} = -\frac{G\, m_i\, m_j}{\lvert \mathbf{r}_{ij} \rvert^{3}} \, \mathbf{r}_{ij}$$
 
-where $\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}$ is the separation vector pointing from $j$ to $i$, and $G$ is Newton's gravitational constant. The total force on body $i$ is the sum over all other bodies:
+where \(\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}\) is the separation vector pointing from \(j\) to \(i\), and \(G\) is Newton's gravitational constant. The total force on body \(i\) is the sum over all other bodies:
 
 $$\mathbf{F}_{i} = \sum_{j \neq i} \mathbf{F}_{ij}$$
 
-For $N = 2$, we get Kepler's beautiful closed-form ellipses. For $N = 3$, the system is [famously chaotic](https://en.wikipedia.org/wiki/Three-body_problem) — Poincaré proved in 1890 that no general closed-form solution exists. For $N > 3$, we have no choice but to simulate.
+For \(N = 2\), we get Kepler's beautiful closed-form ellipses. For \(N = 3\), the system is [famously chaotic](https://en.wikipedia.org/wiki/Three-body_problem) — Poincaré proved in 1890 that no general closed-form solution exists. For \(N > 3\), we have no choice but to simulate.
 
 ---
 
 ## 2 &nbsp; Softened Gravity
 
-There's a practical problem with the force law above. When two bodies get very close, the denominator $\lvert \mathbf{r}_{ij} \rvert^3 \to 0$ and the force *diverges*. In a simulation with discrete timesteps, this creates catastrophic numerical explosions — a single close encounter can send particles flying off to infinity.
+There's a practical problem with the force law above. When two bodies get very close, the denominator \(\lvert \mathbf{r}_{ij} \rvert^3 \to 0\) and the force *diverges*. In a simulation with discrete timesteps, this creates catastrophic numerical explosions — a single close encounter can send particles flying off to infinity.
 
-The standard fix is **gravitational softening**. We add a small parameter $\varepsilon^2$ to the denominator:
+The standard fix is **gravitational softening**. We add a small parameter \(\varepsilon^2\) to the denominator:
 
 $$\mathbf{a}_{i} = \sum_{j \neq i} \frac{G\, m_j \, (\mathbf{r}_j - \mathbf{r}_i)}{\bigl(\lvert \mathbf{r}_{ij} \rvert^{2} + \varepsilon^{2}\bigr)^{3/2}}$$
 
-Physically, this is equivalent to smearing each point mass into a small sphere of radius $\sim \varepsilon$. At distances $r \gg \varepsilon$, the softened force is indistinguishable from the real thing. At very close range, the force caps at a finite maximum instead of diverging. In my implementation, I use $\varepsilon^2 = 10^{-4}$.
+Physically, this is equivalent to smearing each point mass into a small sphere of radius \(\sim \varepsilon\). At distances \(r \gg \varepsilon\), the softened force is indistinguishable from the real thing. At very close range, the force caps at a finite maximum instead of diverging. In my implementation, I use \(\varepsilon^2 = 10^{-4}\).
 
-> **Why acceleration, not force?** Once you divide by $m_i$ (Newton's second law), the mass of the test body cancels. It's cleaner to work directly in terms of accelerations — this is what the code computes.
+> **Why acceleration, not force?** Once you divide by \(m_i\) (Newton's second law), the mass of the test body cancels. It's cleaner to work directly in terms of accelerations — this is what the code computes.
 
 ---
 
@@ -71,7 +71,7 @@ $$\mathbf{v}_{i}^{\,n+1} = \mathbf{v}_{i}^{\,n+1/2} + \frac{\Delta t}{2}\,\mathb
 Notice the beautiful symmetry: the velocity is updated in two *half*-steps that straddle the position update. This time-reversibility is what makes it symplectic.
 
 **Properties of Leapfrog:**
-- Second-order accurate (global error $\sim \Delta t^2$)
+- Second-order accurate (global error \(\sim \Delta t^2\))
 - Requires only **one force evaluation per step**
 - *Exactly* symplectic — energy errors are bounded, never growing
 - Time-reversible — run the simulation backwards and you recover the initial state
@@ -82,7 +82,7 @@ The orbits stay orbits. Forever.
 
 ## 4 &nbsp; The Code
 
-I chose C for raw speed — the $O(N^2)$ force computation is the bottleneck of the entire simulation, and we need every CPU cycle we can get.
+I chose C for raw speed — the \(O(N^2)\) force computation is the bottleneck of the entire simulation, and we need every CPU cycle we can get.
 
 ### Force Computation
 
@@ -116,7 +116,7 @@ for (int i = 0; i < n; i++) {
 
 A few things to note:
 
-- **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at $j = i+1$), exploiting  $\mathbf{F}_{ij} = -\mathbf{F}_{ji}$
+- **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at \(j = i+1\)), exploiting \(\mathbf{F}_{ij} = -\mathbf{F}_{ji}\)
 - **Structure-of-Arrays** (SoA) layout: position components are stored as separate arrays `x[]`, `y[]`, `z[]` rather than an array of structs. This dramatically improves cache locality and enables SIMD auto-vectorization
 - With `-O3 -march=native -ffast-math`, GCC auto-vectorizes the inner loop using AVX2 instructions
 
@@ -166,9 +166,9 @@ The simplest possible test: two equal-mass bodies in a circular orbit. After 100
 
 | Metric | Value |
 |--------|-------|
-| Initial energy $E_0$ | $-7.4995 \times 10^{-1}$ |
-| Final energy $E_f$ | $-7.4995 \times 10^{-1}$ |
-| Relative error $\lvert \Delta E / E_0 \rvert$ | $6.85 \times 10^{-8}$ |
+| Initial energy \(E_0\) | \(-7.4995 \times 10^{-1}\) |
+| Final energy \(E_f\) | \(-7.4995 \times 10^{-1}\) |
+| Relative error \(\lvert \Delta E / E_0 \rvert\) | \(6.85 \times 10^{-8}\) |
 | Throughput | 18.4 million steps/sec |
 
 That's **eight digits** of energy conservation. The orbits close perfectly on every revolution with no visible drift.
@@ -179,18 +179,18 @@ This is one of the most remarkable discoveries in celestial mechanics. In 2000, 
 
 The initial conditions are known to high precision:
 
-| Body | $x$ | $y$ | $v_x$ | $v_y$ |
+| Body | \(x\) | \(y\) | \(v_x\) | \(v_y\) |
 |------|-------|-------|----------|----------|
-| 1 | $+0.97000$ | $-0.24309$ | $+0.46620$ | $+0.43237$ |
-| 2 | $-0.97000$ | $+0.24309$ | $+0.46620$ | $+0.43237$ |
-| 3 | $\phantom{+}0.00000$ | $\phantom{+}0.00000$ | $-0.93241$ | $-0.86473$ |
+| 1 | \(+0.97000\) | \(-0.24309\) | \(+0.46620\) | \(+0.43237\) |
+| 2 | \(-0.97000\) | \(+0.24309\) | \(+0.46620\) | \(+0.43237\) |
+| 3 | \(0.00000\) | \(0.00000\) | \(-0.93241\) | \(-0.86473\) |
 
 After 50,000 steps:
 
 | Metric | Value |
 |--------|-------|
-| Relative error $\lvert \Delta E / E_0 \rvert$ | $7.65 \times 10^{-8}$ |
-| Period | $T \approx 6.326$ |
+| Relative error \(\lvert \Delta E / E_0 \rvert\) | \(7.65 \times 10^{-8}\) |
+| Period | \(T \approx 6.326\) |
 
 Again, excellent energy conservation. The three bodies trace the figure-8 path repeatedly with no visible drift. The choreography is stable under our Leapfrog integrator — a strong confirmation that the symplectic property is doing its job.
 
@@ -198,9 +198,9 @@ Again, excellent energy conservation. The three bodies trace the figure-8 path r
 
 ## 6 &nbsp; Complexity and Scaling
 
-The direct pairwise algorithm computes all $N(N-1)/2$ pairs at each timestep, giving $O(N^2)$ time complexity. For small $N$ (up to ~10,000), this is perfectly tractable — we measured ~18 million pair-evaluations per second on a single core.
+The direct pairwise algorithm computes all \(N(N-1)/2\) pairs at each timestep, giving \(O(N^2)\) time complexity. For small \(N\) (up to ~10,000), this is perfectly tractable — we measured ~18 million pair-evaluations per second on a single core.
 
-For larger simulations ($N > 10^5$), the standard approach is the **Barnes-Hut algorithm** (1986). The idea is elegant: you build an octree over the particle positions and then approximate the gravitational effect of distant groups of particles as a single multipole expansion. Close particles are still computed exactly. This reduces the cost from $O(N^2)$ to $O(N \log N)$, making million-body simulations feasible.
+For larger simulations (\(N > 10^5\)), the standard approach is the **Barnes-Hut algorithm** (1986). The idea is elegant: you build an octree over the particle positions and then approximate the gravitational effect of distant groups of particles as a single multipole expansion. Close particles are still computed exactly. This reduces the cost from \(O(N^2)\) to \(O(N \log N)\), making million-body simulations feasible.
 
 ---
 
@@ -211,7 +211,7 @@ I built an **[interactive gravitational simulator](/nbody-simulator/)** that run
 - Choose from **6 presets** — two-body orbit, three-body figure-8, Plummer cluster, solar system, binary star, and Lagrange triangle
 - **Click anywhere** to place new bodies, then **drag** to set their initial velocity
 - Watch the **energy diagnostics** in real-time — the colour tells you how well energy is being conserved
-- Crank up the timestep and watch what happens when $\Delta t$ gets too large (hint: the orbits explode — this is exactly why the choice of integrator matters)
+- Crank up the timestep and watch what happens when \(\Delta t\) gets too large (hint: the orbits explode — this is exactly why the choice of integrator matters)
 
 **[Launch the simulator →](/nbody-simulator/)**
 
