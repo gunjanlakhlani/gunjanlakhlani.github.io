@@ -44,8 +44,6 @@ Think about it:
 
 | Physics | Software |
 |---------|----------|
-| Physics asks | Software asks |
-|--------------|---------------|
 | Which transformations leave the action invariant? | Which substitutions leave observable behaviour unchanged? |
 | What quantity must then be conserved? | What contract must every implementation preserve? |
 | Where is the symmetry broken? | Where does an abstraction leak? |

@@ -16,31 +16,31 @@ In this post, I'll walk through the solver from the physics to the browser archi
 
 ## 1 &nbsp; The N-Body Problem
 
-The setup is deceptively simple. You have \(N\) point masses, each feeling the gravitational pull of every other mass.
+The setup is deceptively simple. You have $N$ point masses, each feeling the gravitational pull of every other mass.
 
-Newton tells us the force on body \(i\) due to body \(j\):
+Newton tells us the force on body $i$ due to body $j$:
 
 $$\mathbf{F}_{ij} = -\frac{G\, m_i\, m_j}{\lvert \mathbf{r}_{ij} \rvert^{3}} \, \mathbf{r}_{ij}$$
 
-where \(\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}\) is the separation vector pointing from \(j\) to \(i\), and \(G\) is Newton's gravitational constant. The total force on body \(i\) is the sum over all other bodies:
+where $\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}$ is the separation vector pointing from $j$ to $i$, and $G$ is Newton's gravitational constant. The total force on body $i$ is the sum over all other bodies:
 
 $$\mathbf{F}_{i} = \sum_{j \neq i} \mathbf{F}_{ij}$$
 
-For \(N = 2\), we get Kepler's beautiful closed-form conic sections. Starting at \(N = 3\), generic trajectories can be chaotic and there is no comparable general formula for arbitrary initial conditions. Numerical integration is the practical route.
+For $N = 2$, we get Kepler's beautiful closed-form conic sections. Starting at $N = 3$, generic trajectories can be chaotic and there is no comparable general formula for arbitrary initial conditions. Numerical integration is the practical route.
 
 ---
 
 ## 2 &nbsp; Softened Gravity
 
-There's a practical problem with the force law above. When two bodies get very close, the denominator \(\lvert \mathbf{r}_{ij} \rvert^3 \to 0\) and the force *diverges*. In a simulation with discrete timesteps, this creates catastrophic numerical explosions — a single close encounter can send particles flying off to infinity.
+There's a practical problem with the force law above. When two bodies get very close, the denominator $\lvert \mathbf{r}_{ij} \rvert^3 \to 0$ and the force *diverges*. In a simulation with discrete timesteps, this creates catastrophic numerical explosions — a single close encounter can send particles flying off to infinity.
 
-The standard fix is **gravitational softening**. We add a small parameter \(\varepsilon^2\) to the denominator:
+The standard fix is **gravitational softening**. We add a small parameter $\varepsilon^2$ to the denominator:
 
 $$\mathbf{a}_{i} = \sum_{j \neq i} \frac{G\, m_j \, (\mathbf{r}_j - \mathbf{r}_i)}{\bigl(\lvert \mathbf{r}_{ij} \rvert^{2} + \varepsilon^{2}\bigr)^{3/2}}$$
 
-This Plummer-style softening can be interpreted as replacing a point source with an extended mass profile. At distances \(r \gg \varepsilon\), the force approaches the point-mass result. At close range, it remains finite. In this dimensionless simulation, I use \(\varepsilon^2 = 10^{-4}\).
+This Plummer-style softening can be interpreted as replacing a point source with an extended mass profile. At distances $r \gg \varepsilon$, the force approaches the point-mass result. At close range, it remains finite. In this dimensionless simulation, I use $\varepsilon^2 = 10^{-4}$.
 
-> **Why acceleration, not force?** Once you divide by \(m_i\) (Newton's second law), the mass of the test body cancels. It's cleaner to work directly in terms of accelerations — this is what the code computes.
+> **Why acceleration, not force?** Once you divide by $m_i$ (Newton's second law), the mass of the test body cancels. It's cleaner to work directly in terms of accelerations — this is what the code computes.
 
 ---
 
@@ -73,7 +73,7 @@ $$\mathbf{v}_{i}^{\,n+1} = \mathbf{v}_{i}^{\,n+1/2} + \frac{\Delta t}{2}\,\mathb
 Notice the beautiful symmetry: the velocity is updated in two *half*-steps that straddle the position update. This time-reversibility is what makes it symplectic.
 
 **Properties of Leapfrog:**
-- Second-order accurate (global error \(\sim \Delta t^2\))
+- Second-order accurate (global error $\sim \Delta t^2$)
 - Requires only **one force evaluation per step**
 - Symplectic at a fixed timestep — long-term energy error is usually bounded and oscillatory
 - Time-reversible — run the simulation backwards and you recover the initial state
@@ -118,7 +118,7 @@ for (int i = 0; i < n; i++) {
 
 A few things to note:
 
-- **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at \(j = i+1\)), exploiting \(\mathbf{F}_{ij} = -\mathbf{F}_{ji}\)
+- **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at $j = i+1$), exploiting $\mathbf{F}_{ij} = -\mathbf{F}_{ji}$
 - **Structure-of-Arrays** (SoA) layout: position components are stored as separate arrays `x[]`, `y[]`, `z[]` rather than an array of structs. This dramatically improves cache locality and enables SIMD auto-vectorization
 - With an optimising compiler, the simple contiguous loops are good candidates for auto-vectorisation. The exact instructions depend on the compiler, flags, and target CPU, so this is something to verify from the generated code rather than assume.
 
@@ -168,9 +168,9 @@ The simplest possible test: two equal-mass bodies in a circular orbit. After 100
 
 | Metric | Value |
 |--------|-------|
-| Initial energy \(E_0\) | \(-7.4995 \times 10^{-1}\) |
-| Final energy \(E_f\) | \(-7.4995 \times 10^{-1}\) |
-| Relative error \(\lvert \Delta E / E_0 \rvert\) | \(6.85 \times 10^{-8}\) |
+| Initial energy $E_0$ | $-7.4995 \times 10^{-1}$ |
+| Final energy $E_f$ | $-7.4995 \times 10^{-1}$ |
+| Relative error $\lvert \Delta E / E_0 \rvert$ | $6.85 \times 10^{-8}$ |
 | Throughput | 18.4 million steps/sec |
 
 That run kept the relative energy error below one part in ten million. It is a useful regression test for this particular timestep and initial condition—not a universal accuracy guarantee.
@@ -181,18 +181,18 @@ This is one of the most remarkable modern results in celestial mechanics. Cris M
 
 The initial conditions are known to high precision:
 
-| Body | \(x\) | \(y\) | \(v_x\) | \(v_y\) |
+| Body | $x$ | $y$ | $v_x$ | $v_y$ |
 |------|-------|-------|----------|----------|
-| 1 | \(+0.97000\) | \(-0.24309\) | \(+0.46620\) | \(+0.43237\) |
-| 2 | \(-0.97000\) | \(+0.24309\) | \(+0.46620\) | \(+0.43237\) |
-| 3 | \(0.00000\) | \(0.00000\) | \(-0.93241\) | \(-0.86473\) |
+| 1 | $+0.97000$ | $-0.24309$ | $+0.46620$ | $+0.43237$ |
+| 2 | $-0.97000$ | $+0.24309$ | $+0.46620$ | $+0.43237$ |
+| 3 | $0.00000$ | $0.00000$ | $-0.93241$ | $-0.86473$ |
 
 After 50,000 steps:
 
 | Metric | Value |
 |--------|-------|
-| Relative error \(\lvert \Delta E / E_0 \rvert\) | \(7.65 \times 10^{-8}\) |
-| Period | \(T \approx 6.326\) |
+| Relative error $\lvert \Delta E / E_0 \rvert$ | $7.65 \times 10^{-8}$ |
+| Period | $T \approx 6.326$ |
 
 Again, the small error is encouraging. More precisely, it shows that this implementation and timestep reproduce the known choreography for the measured duration. It does not mean the orbit is stable to every perturbation.
 
@@ -200,9 +200,9 @@ Again, the small error is encouraging. More precisely, it shows that this implem
 
 ## 6 &nbsp; Complexity and Scaling
 
-The direct pairwise algorithm computes all \(N(N-1)/2\) pairs at each timestep, giving \(O(N^2)\) time complexity. It is exact with respect to the softened force law and works well for small systems, but its cost rises quickly.
+The direct pairwise algorithm computes all $N(N-1)/2$ pairs at each timestep, giving $O(N^2)$ time complexity. It is exact with respect to the softened force law and works well for small systems, but its cost rises quickly.
 
-The live solver switches to the **Barnes–Hut algorithm** above 200 bodies. It builds a quadtree over the two-dimensional positions and approximates sufficiently distant cells by their centre of mass. Nearby cells are opened and examined in more detail. The opening angle \(\theta\) trades accuracy for speed; the implementation uses a stricter value for ordinary runs and relaxes it for the largest presets. Typical cost falls toward \(O(N\log N)\), though pathological particle distributions can do worse.
+The live solver switches to the **Barnes–Hut algorithm** above 200 bodies. It builds a quadtree over the two-dimensional positions and approximates sufficiently distant cells by their centre of mass. Nearby cells are opened and examined in more detail. The opening angle $\theta$ trades accuracy for speed; the implementation uses a stricter value for ordinary runs and relaxes it for the largest presets. Typical cost falls toward $O(N\log N)$, though pathological particle distributions can do worse.
 
 ## 7 &nbsp; Browser Architecture
 
@@ -213,7 +213,7 @@ The browser version separates simulation from presentation:
 3. **WebGL** draws the particles in one batched call. A small 2D overlay handles trails, the grid, and interaction feedback.
 4. Direct summation is used for small systems; Barnes–Hut takes over when the body count makes pairwise work expensive.
 
-For systems above 500 bodies, the interface intentionally stops reporting total energy. Computing exact potential energy is itself \(O(N^2)\); showing kinetic energy under a “total energy” label would be fast but physically misleading.
+For systems above 500 bodies, the interface intentionally stops reporting total energy. Computing exact potential energy is itself $O(N^2)$; showing kinetic energy under a “total energy” label would be fast but physically misleading.
 
 ---
 
@@ -224,7 +224,7 @@ I built an **[interactive gravitational simulator](/nbody-simulator-webgl-worker
 - Choose from classic two- and three-body systems or scale up to large particle fields
 - **Click anywhere** to place new bodies, then **drag** to set their initial velocity
 - Watch the **energy diagnostics** in real-time — the colour tells you how well energy is being conserved
-- Crank up the timestep and watch what happens when \(\Delta t\) gets too large (hint: the orbits explode — this is exactly why the choice of integrator matters)
+- Crank up the timestep and watch what happens when $\Delta t$ gets too large (hint: the orbits explode — this is exactly why the choice of integrator matters)
 
 **[Launch the simulator →](/nbody-simulator-webgl-worker/)**
 
