@@ -2,7 +2,7 @@
 layout: post
 title: "Building a Gravitational N-Body Solver from Scratch"
 date: 2026-02-28
-excerpt: "From Newton's law of gravitation to a working C implementation — symplectic integration, energy conservation, and the beautiful figure-8 three-body orbit."
+excerpt: "From Newton's law to a browser-based solver — symplectic integration, Barnes–Hut gravity, Web Workers, WebGL, and the figure-eight orbit."
 tags: [physics, simulation, computational-physics, N-body]
 math: true
 simulator: true
@@ -22,7 +22,7 @@ Newton tells us the force on body $i$ due to body $j$:
 
 $$\mathbf{F}_{ij} = -\frac{G\, m_i\, m_j}{\lvert \mathbf{r}_{ij} \rvert^{3}} \, \mathbf{r}_{ij}$$
 
-where $\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}$ is the separation vector pointing from $j$ to $i$, and $G$ is Newton's gravitational constant. The total force on body $i$ is the sum over all other bodies:
+Here **r**<sub>ij</sub> = **r**<sub>i</sub> − **r**<sub>j</sub> is the separation vector pointing from body $j$ to body $i$, and $G$ is Newton's gravitational constant. The total force on body $i$ is the sum over all other bodies:
 
 $$\mathbf{F}_{i} = \sum_{j \neq i} \mathbf{F}_{ij}$$
 
@@ -118,7 +118,7 @@ for (int i = 0; i < n; i++) {
 
 A few things to note:
 
-- **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at $j = i+1$), exploiting $\mathbf{F}_{ij} = -\mathbf{F}_{ji}$
+- **Newton's third law** cuts the work in half — we compute each pair once (the inner loop starts at $j = i+1$) and apply equal-and-opposite contributions to the two bodies
 - **Structure-of-Arrays** (SoA) layout: position components are stored as separate arrays `x[]`, `y[]`, `z[]` rather than an array of structs. This dramatically improves cache locality and enables SIMD auto-vectorization
 - With an optimising compiler, the simple contiguous loops are good candidates for auto-vectorisation. The exact instructions depend on the compiler, flags, and target CPU, so this is something to verify from the generated code rather than assume.
 
