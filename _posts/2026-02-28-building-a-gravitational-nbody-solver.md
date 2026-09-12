@@ -4,11 +4,13 @@ title: "Building a Gravitational N-Body Solver from Scratch"
 date: 2026-02-28
 excerpt: "From Newton's law of gravitation to a working C implementation — symplectic integration, energy conservation, and the beautiful figure-8 three-body orbit."
 tags: [physics, simulation, computational-physics, N-body]
+math: true
+simulator: true
 ---
 
 There's something deeply satisfying about watching gravity do its thing. Two stars locked in an eternal waltz. Three bodies tracing an impossible figure-8. A cluster of a thousand particles collapsing under their own weight.
 
-In this post, I'll walk through how I built a gravitational N-body solver in C — from the physics, to the algorithm, to the code — and show you the results. If you want to play with gravity yourself, there's an **[interactive simulator](/nbody-simulator/)** at the end.
+In this post, I'll walk through the solver from the physics to the browser architecture: a symplectic integrator, a Barnes–Hut tree, a Web Worker, and a WebGL renderer. If you want to play with gravity first, open the **[interactive simulator](/nbody-simulator-webgl-worker/)**.
 
 ---
 
@@ -24,7 +26,7 @@ where \(\mathbf{r}_{ij} = \mathbf{r}_{i} - \mathbf{r}_{j}\) is the separation ve
 
 $$\mathbf{F}_{i} = \sum_{j \neq i} \mathbf{F}_{ij}$$
 
-For \(N = 2\), we get Kepler's beautiful closed-form ellipses. For \(N = 3\), the system is [famously chaotic](https://en.wikipedia.org/wiki/Three-body_problem) — Poincaré proved in 1890 that no general closed-form solution exists. For \(N > 3\), we have no choice but to simulate.
+For \(N = 2\), we get Kepler's beautiful closed-form conic sections. Starting at \(N = 3\), generic trajectories can be chaotic and there is no comparable general formula for arbitrary initial conditions. Numerical integration is the practical route.
 
 ---
 
@@ -36,7 +38,7 @@ The standard fix is **gravitational softening**. We add a small parameter \(\var
 
 $$\mathbf{a}_{i} = \sum_{j \neq i} \frac{G\, m_j \, (\mathbf{r}_j - \mathbf{r}_i)}{\bigl(\lvert \mathbf{r}_{ij} \rvert^{2} + \varepsilon^{2}\bigr)^{3/2}}$$
 
-Physically, this is equivalent to smearing each point mass into a small sphere of radius \(\sim \varepsilon\). At distances \(r \gg \varepsilon\), the softened force is indistinguishable from the real thing. At very close range, the force caps at a finite maximum instead of diverging. In my implementation, I use \(\varepsilon^2 = 10^{-4}\).
+This Plummer-style softening can be interpreted as replacing a point source with an extended mass profile. At distances \(r \gg \varepsilon\), the force approaches the point-mass result. At close range, it remains finite. In this dimensionless simulation, I use \(\varepsilon^2 = 10^{-4}\).
 
 > **Why acceleration, not force?** Once you divide by \(m_i\) (Newton's second law), the mass of the test body cancels. It's cleaner to work directly in terms of accelerations — this is what the code computes.
 
@@ -56,7 +58,7 @@ This is first-order and, worse, it **systematically gains energy** over time. Yo
 
 ### The Symplectic Advantage
 
-The right choice is a **symplectic integrator** — one that exactly preserves the *geometric structure* of Hamiltonian mechanics. Here's the key insight: gravity is a Hamiltonian system, meaning it lives on a phase space with a special structure (a symplectic form). A symplectic integrator preserves this structure exactly, which means it can never systematically gain or lose energy. The errors it makes are *bounded* forever.
+The right choice is a **symplectic integrator**—one designed to preserve the geometric structure of Hamiltonian mechanics. With a fixed timestep and a well-resolved trajectory, its energy error typically oscillates around the true value instead of drifting monotonically. That is a powerful long-term advantage, but not magic: a timestep that is too large can still produce a bad orbit.
 
 The simplest and most widely used symplectic integrator is the **Leapfrog** method (also called Velocity Verlet). It uses a Kick-Drift-Kick scheme:
 
@@ -73,16 +75,16 @@ Notice the beautiful symmetry: the velocity is updated in two *half*-steps that 
 **Properties of Leapfrog:**
 - Second-order accurate (global error \(\sim \Delta t^2\))
 - Requires only **one force evaluation per step**
-- *Exactly* symplectic — energy errors are bounded, never growing
+- Symplectic at a fixed timestep — long-term energy error is usually bounded and oscillatory
 - Time-reversible — run the simulation backwards and you recover the initial state
 
-The orbits stay orbits. Forever.
+The practical result is that resolved orbits remain recognisably orbital over long runs.
 
 ---
 
 ## 4 &nbsp; The Code
 
-I chose C for raw speed — the \(O(N^2)\) force computation is the bottleneck of the entire simulation, and we need every CPU cycle we can get.
+The reference implementation is written in C, while the live version runs JavaScript in a Web Worker so it can work on GitHub Pages without a server. Both use structure-of-arrays storage; the browser version switches algorithms as the system grows.
 
 ### Force Computation
 
@@ -118,7 +120,7 @@ A few things to note:
 
 - **Newton's third law** cuts the work in half — we only compute each pair once (the inner loop starts at \(j = i+1\)), exploiting \(\mathbf{F}_{ij} = -\mathbf{F}_{ji}\)
 - **Structure-of-Arrays** (SoA) layout: position components are stored as separate arrays `x[]`, `y[]`, `z[]` rather than an array of structs. This dramatically improves cache locality and enables SIMD auto-vectorization
-- With `-O3 -march=native -ffast-math`, GCC auto-vectorizes the inner loop using AVX2 instructions
+- With an optimising compiler, the simple contiguous loops are good candidates for auto-vectorisation. The exact instructions depend on the compiler, flags, and target CPU, so this is something to verify from the generated code rather than assume.
 
 ### The Leapfrog Step
 
@@ -171,11 +173,11 @@ The simplest possible test: two equal-mass bodies in a circular orbit. After 100
 | Relative error \(\lvert \Delta E / E_0 \rvert\) | \(6.85 \times 10^{-8}\) |
 | Throughput | 18.4 million steps/sec |
 
-That's **eight digits** of energy conservation. The orbits close perfectly on every revolution with no visible drift.
+That run kept the relative energy error below one part in ten million. It is a useful regression test for this particular timestep and initial condition—not a universal accuracy guarantee.
 
 ### Three-Body Figure-8
 
-This is one of the most remarkable discoveries in celestial mechanics. In 2000, Alain Chenciner and Richard Montgomery [proved the existence](https://arxiv.org/abs/math/0011268) of a periodic solution where three equal-mass bodies chase each other along a **figure-8 shaped path** in the plane. It's a choreography — all three bodies trace the *same* curve, offset in time by one-third of a period.
+This is one of the most remarkable modern results in celestial mechanics. Cris Moore found the orbit numerically in 1993; Alain Chenciner and Richard Montgomery later [proved the existence](https://arxiv.org/abs/math/0011268) of the equal-mass periodic solution. The bodies form a choreography: all three trace the same figure-eight curve, separated by one-third of a period.
 
 The initial conditions are known to high precision:
 
@@ -192,28 +194,39 @@ After 50,000 steps:
 | Relative error \(\lvert \Delta E / E_0 \rvert\) | \(7.65 \times 10^{-8}\) |
 | Period | \(T \approx 6.326\) |
 
-Again, excellent energy conservation. The three bodies trace the figure-8 path repeatedly with no visible drift. The choreography is stable under our Leapfrog integrator — a strong confirmation that the symplectic property is doing its job.
+Again, the small error is encouraging. More precisely, it shows that this implementation and timestep reproduce the known choreography for the measured duration. It does not mean the orbit is stable to every perturbation.
 
 ---
 
 ## 6 &nbsp; Complexity and Scaling
 
-The direct pairwise algorithm computes all \(N(N-1)/2\) pairs at each timestep, giving \(O(N^2)\) time complexity. For small \(N\) (up to ~10,000), this is perfectly tractable — we measured ~18 million pair-evaluations per second on a single core.
+The direct pairwise algorithm computes all \(N(N-1)/2\) pairs at each timestep, giving \(O(N^2)\) time complexity. It is exact with respect to the softened force law and works well for small systems, but its cost rises quickly.
 
-For larger simulations (\(N > 10^5\)), the standard approach is the **Barnes-Hut algorithm** (1986). The idea is elegant: you build an octree over the particle positions and then approximate the gravitational effect of distant groups of particles as a single multipole expansion. Close particles are still computed exactly. This reduces the cost from \(O(N^2)\) to \(O(N \log N)\), making million-body simulations feasible.
+The live solver switches to the **Barnes–Hut algorithm** above 200 bodies. It builds a quadtree over the two-dimensional positions and approximates sufficiently distant cells by their centre of mass. Nearby cells are opened and examined in more detail. The opening angle \(\theta\) trades accuracy for speed; the implementation uses a stricter value for ordinary runs and relaxes it for the largest presets. Typical cost falls toward \(O(N\log N)\), though pathological particle distributions can do worse.
+
+## 7 &nbsp; Browser Architecture
+
+The browser version separates simulation from presentation:
+
+1. A **Web Worker** owns positions, velocities, masses, force calculation, and leapfrog steps. Heavy computation never blocks pointer input or the page controls.
+2. Each completed frame transfers a packed position buffer back to the main thread without copying it twice.
+3. **WebGL** draws the particles in one batched call. A small 2D overlay handles trails, the grid, and interaction feedback.
+4. Direct summation is used for small systems; Barnes–Hut takes over when the body count makes pairwise work expensive.
+
+For systems above 500 bodies, the interface intentionally stops reporting total energy. Computing exact potential energy is itself \(O(N^2)\); showing kinetic energy under a “total energy” label would be fast but physically misleading.
 
 ---
 
-## 7 &nbsp; Try It Yourself
+## 8 &nbsp; Try It Yourself
 
-I built an **[interactive gravitational simulator](/nbody-simulator/)** that runs the same physics in your browser using HTML5 Canvas. You can:
+I built an **[interactive gravitational simulator](/nbody-simulator-webgl-worker/)** that runs the physics in your browser using a worker and WebGL. You can:
 
-- Choose from **6 presets** — two-body orbit, three-body figure-8, Plummer cluster, solar system, binary star, and Lagrange triangle
+- Choose from classic two- and three-body systems or scale up to large particle fields
 - **Click anywhere** to place new bodies, then **drag** to set their initial velocity
 - Watch the **energy diagnostics** in real-time — the colour tells you how well energy is being conserved
 - Crank up the timestep and watch what happens when \(\Delta t\) gets too large (hint: the orbits explode — this is exactly why the choice of integrator matters)
 
-**[Launch the simulator →](/nbody-simulator/)**
+**[Launch the simulator →](/nbody-simulator-webgl-worker/)**
 
 The full C source code for the solver is available on [GitHub](https://github.com/gunjanlakhlani).
 

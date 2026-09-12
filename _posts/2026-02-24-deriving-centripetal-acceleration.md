@@ -4,11 +4,12 @@ title: "Why Does a Ball on a String Pull Your Hand? Deriving Centripetal Acceler
 date: 2026-02-24
 excerpt: "Spin a ball on a string and you feel a tug. But why? Let's derive the formula for centripetal acceleration from first principles — no calculus required."
 tags: [physics, high-school, mechanics, derivation]
+math: true
 ---
 
-Have you ever spun a ball on a string in a circle above your head? You feel it pulling on your hand — constantly tugging *inward*. The ball wants to fly off in a straight line, but the string keeps yanking it back toward the centre.
+Have you ever spun a ball on a string in a circle above your head? You feel the ball pull your hand *outward*. At the other end of the same tension force, your hand and the string pull the ball *inward*, continually bending its path toward the centre.
 
-That inward pull is the centripetal force. And it exists because the ball is **accelerating** — even if its *speed* never changes.
+“Centripetal force” is not a new kind of force: it is the name for the **net inward force** in circular motion. In this example, tension supplies it. That force exists because the ball is **accelerating** even if its *speed* never changes.
 
 How can something accelerate without speeding up? That's what we're going to figure out today, and we'll end up with one of the most elegant little formulas in all of physics.
 
@@ -308,7 +309,11 @@ Here is the key insight. When the *position* rotates by $\Delta\theta$, the *vel
 
 Both $v_1$ and $v_2$ have the same magnitude $v$ (speed is constant). The angle between them is $\Delta\theta$.
 
-For **small** angles, the chord connecting the tips of two equal-length vectors is approximately equal to the arc between them. So:
+The velocity triangle gives an exact chord length:
+
+$$|\Delta \mathbf{v}| = 2v\sin\left(\frac{\Delta\theta}{2}\right)$$
+
+When the time interval becomes very short, so does $\Delta\theta$, and $2\sin(\Delta\theta/2)$ approaches $\Delta\theta$. Geometrically, the chord and arc become indistinguishable. Therefore:
 
 $$|\Delta v| \approx v \cdot \Delta\theta$$
 
@@ -320,7 +325,7 @@ We now have two expressions. From Step 3:
 
 $$\Delta\theta = \frac{v \cdot \Delta t}{r}$$
 
-Substituting into the expression for $\Delta v$:
+Substituting into the short-interval expression for $\Delta v$:
 
 $$|\Delta v| = v \cdot \Delta\theta = v \cdot \frac{v \cdot \Delta t}{r} = \frac{v^2 \cdot \Delta t}{r}$$
 
@@ -328,7 +333,7 @@ Acceleration is defined as the change in velocity divided by time elapsed:
 
 $$a = \frac{|\Delta v|}{\Delta t} = \frac{v^2 \cdot \Delta t}{r \cdot \Delta t}$$
 
-The $\Delta t$ cancels, and we get:
+As $\Delta t$ shrinks toward zero, the approximation becomes exact. The $\Delta t$ cancels, and we get:
 
 <div style="background: rgba(99,179,237,0.08); border: 1px solid rgba(99,179,237,0.25); border-radius: 8px; padding: 1.5rem; margin: 2rem 0; text-align: center;" markdown="1">
 

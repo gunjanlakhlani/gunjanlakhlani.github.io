@@ -8,8 +8,11 @@
 #define BH_THETA 0.7
 #define BH_THETA_SQ (BH_THETA * BH_THETA)
 
-// MAX_NODES: 4 million to comfortably fit 100K very dense points
-#define MAX_NODES 4000000
+// A full quadtree normally needs far fewer than six nodes per body. The depth
+// guard below also prevents coincident particles from exhausting the pool.
+#define MAX_NODES 1000000
+#define MAX_TREE_DEPTH 40
+#define MIN_NODE_HALF 1e-12
 
 // Struct of Arrays for tree nodes (better cache locality)
 double node_cx[MAX_NODES];
@@ -52,9 +55,9 @@ static inline int get_quadrant(int nid, double px, double py) {
 }
 
 // Forward declare
-void insert_body(int nid, int idx, double* x, double* y, double* mass);
+void insert_body(int nid, int idx, int depth, double* x, double* y, double* mass);
 
-void subdivide(int nid, double* x, double* y, double* mass) {
+void subdivide(int nid, int depth, double* x, double* y, double* mass) {
     double hs = node_half[nid] * 0.5;
     double cx = node_cx[nid], cy = node_cy[nid];
     int ci = nid * 4;
@@ -76,11 +79,19 @@ void subdivide(int nid, double* x, double* y, double* mass) {
     if (old_idx >= 0) {
         node_body[nid] = -1;
         int q = get_quadrant(nid, x[old_idx], y[old_idx]);
-        insert_body(node_children[ci + q], old_idx, x, y, mass);
+        insert_body(node_children[ci + q], old_idx, depth + 1, x, y, mass);
     }
 }
 
-void insert_body(int nid, int idx, double* x, double* y, double* mass) {
+static inline void aggregate_body(int nid, int idx, double* x, double* y, double* mass) {
+    double total_mass = node_mass[nid] + mass[idx];
+    node_com_x[nid] = (node_com_x[nid] * node_mass[nid] + x[idx] * mass[idx]) / total_mass;
+    node_com_y[nid] = (node_com_y[nid] * node_mass[nid] + y[idx] * mass[idx]) / total_mass;
+    node_mass[nid] = total_mass;
+    node_count[nid]++;
+}
+
+void insert_body(int nid, int idx, int depth, double* x, double* y, double* mass) {
     if (nid == -1) return; // Out of memory protection
 
     if (node_count[nid] == 0) {
@@ -92,21 +103,25 @@ void insert_body(int nid, int idx, double* x, double* y, double* mass) {
         return;
     }
 
+    if (depth >= MAX_TREE_DEPTH || node_half[nid] <= MIN_NODE_HALF) {
+        node_body[nid] = -1;
+        aggregate_body(nid, idx, x, y, mass);
+        return;
+    }
+
     int ci = nid * 4;
     if (node_children[ci] == -1) {
-        subdivide(nid, x, y, mass);
+        subdivide(nid, depth, x, y, mass);
     }
 
     if (node_children[ci] != -1) {
         int q = get_quadrant(nid, x[idx], y[idx]);
-        insert_body(node_children[ci + q], idx, x, y, mass);
+        insert_body(node_children[ci + q], idx, depth + 1, x, y, mass);
+    } else {
+        node_body[nid] = -1;
     }
 
-    double totalM = node_mass[nid] + mass[idx];
-    node_com_x[nid] = (node_com_x[nid] * node_mass[nid] + x[idx] * mass[idx]) / totalM;
-    node_com_y[nid] = (node_com_y[nid] * node_mass[nid] + y[idx] * mass[idx]) / totalM;
-    node_mass[nid] = totalM;
-    node_count[nid]++;
+    aggregate_body(nid, idx, x, y, mass);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -128,14 +143,14 @@ int build_tree(int N, double* x, double* y, double* mass) {
 
     int root = alloc_node(cx, cy, half);
     for (int i = 0; i < N; i++) {
-        insert_body(root, i, x, y, mass);
+        insert_body(root, i, 0, x, y, mass);
     }
     return root;
 }
 
 int tree_stack[1024];
 
-void compute_force_from_tree(int root, double bx, double by, double* ax, double* ay) {
+void compute_force_from_tree(int root, int body_index, double bx, double by, double* mass, double* ax, double* ay) {
     double fax = 0.0, fay = 0.0;
     int stack_top = 0;
     tree_stack[stack_top++] = root;
@@ -149,7 +164,7 @@ void compute_force_from_tree(int root, double bx, double by, double* ax, double*
         double r2 = dx * dx + dy * dy + SOFTENING;
 
         if (node_count[nid] == 1) {
-            if (r2 < SOFTENING * 2.0) continue;
+            if (node_body[nid] == body_index) continue;
             double rInv = 1.0 / sqrt(r2);
             double r3Inv = rInv * rInv * rInv;
             fax += node_mass[nid] * dx * r3Inv; // G=1.0
@@ -157,8 +172,33 @@ void compute_force_from_tree(int root, double bx, double by, double* ax, double*
             continue;
         }
 
+        int ci = nid * 4;
+        int contains_target = fabs(bx - node_cx[nid]) <= node_half[nid]
+            && fabs(by - node_cy[nid]) <= node_half[nid];
+        int terminal_aggregate = node_children[ci] == -1;
+
+        if (terminal_aggregate) {
+            double aggregate_mass = node_mass[nid];
+            double aggregate_x = node_com_x[nid];
+            double aggregate_y = node_com_y[nid];
+            if (contains_target) {
+                aggregate_mass -= mass[body_index];
+                if (aggregate_mass <= 0.0) continue;
+                aggregate_x = (node_com_x[nid] * node_mass[nid] - bx * mass[body_index]) / aggregate_mass;
+                aggregate_y = (node_com_y[nid] * node_mass[nid] - by * mass[body_index]) / aggregate_mass;
+            }
+            double adx = aggregate_x - bx;
+            double ady = aggregate_y - by;
+            double ar2 = adx * adx + ady * ady + SOFTENING;
+            double ar_inv = 1.0 / sqrt(ar2);
+            double ar3_inv = ar_inv * ar_inv * ar_inv;
+            fax += aggregate_mass * adx * ar3_inv;
+            fay += aggregate_mass * ady * ar3_inv;
+            continue;
+        }
+
         double s = node_half[nid] * 2.0;
-        if (s * s < BH_THETA_SQ * r2) {
+        if (!contains_target && s * s < BH_THETA_SQ * r2) {
             double rInv = 1.0 / sqrt(r2);
             double r3Inv = rInv * rInv * rInv;
             fax += node_mass[nid] * dx * r3Inv;
@@ -166,7 +206,6 @@ void compute_force_from_tree(int root, double bx, double by, double* ax, double*
             continue;
         }
 
-        int ci = nid * 4;
         for (int c = 0; c < 4; c++) {
             if (node_children[ci + c] != -1) {
                 tree_stack[stack_top++] = node_children[ci + c];
@@ -182,7 +221,7 @@ void compute_forces_bh(int N, double* x, double* y, double* ax, double* ay, doub
     int root = build_tree(N, x, y, mass);
     for (int i = 0; i < N; i++) {
         double fax, fay;
-        compute_force_from_tree(root, x[i], y[i], &fax, &fay);
+        compute_force_from_tree(root, i, x[i], y[i], mass, &fax, &fay);
         ax[i] = fax;
         ay[i] = fay;
     }
@@ -242,7 +281,7 @@ double compute_energy(int N, double* x, double* y, double* vx, double* vy, doubl
     for (int i = 0; i < N; i++) {
         ke += 0.5 * mass[i] * (vx[i] * vx[i] + vy[i] * vy[i]);
     }
-    if (N > 500) return ke; // O(N^2) PE is too slow for large N
+    if (N > 500) return NAN; // Total energy is unavailable without O(N^2) potential energy.
     
     for (int i = 0; i < N; i++) {
         for (int j = i + 1; j < N; j++) {

@@ -13,22 +13,37 @@ let N = 0;
 let x, y, vx, vy, ax, ay, mass;
 let simTime = 0;
 
-// ─── Barnes-Hut Quadtree (pool-allocated for zero GC) ──────────
-const MAX_NODES = 4000000;
-let nodeCx = new Float64Array(MAX_NODES);
-let nodeCy = new Float64Array(MAX_NODES);
-let nodeHalf = new Float64Array(MAX_NODES);
-let nodeMass = new Float64Array(MAX_NODES);
-let nodeComX = new Float64Array(MAX_NODES);
-let nodeComY = new Float64Array(MAX_NODES);
-let nodeCount = new Int32Array(MAX_NODES);
-let nodeBody = new Int32Array(MAX_NODES);
-// Children: 4 ints per node (NW, NE, SW, SE), -1 means no child
-let nodeChildren = new Int32Array(MAX_NODES * 4);
+// ─── Barnes-Hut Quadtree (pool-allocated for zero per-step GC) ──
+// Allocate in proportion to the current simulation instead of reserving
+// almost 300 MB at startup. Six nodes per body leaves ample room for sparse
+// branches while keeping the 100K preset below roughly 45 MB of tree storage.
+const MIN_TREE_NODES = 1024;
+const NODES_PER_BODY = 6;
+const MAX_TREE_NODES = 1000000;
+const MAX_TREE_DEPTH = 40;
+const MIN_NODE_HALF = 1e-12;
+let treeCapacity = 0;
+let nodeCx, nodeCy, nodeHalf, nodeMass, nodeComX, nodeComY;
+let nodeCount, nodeBody, nodeChildren;
 let nodePoolSize = 0;
 
+function ensureTreeCapacity(bodyCount) {
+    const needed = Math.min(MAX_TREE_NODES, Math.max(MIN_TREE_NODES, bodyCount * NODES_PER_BODY + 64));
+    if (needed <= treeCapacity) return;
+    treeCapacity = needed;
+    nodeCx = new Float64Array(treeCapacity);
+    nodeCy = new Float64Array(treeCapacity);
+    nodeHalf = new Float64Array(treeCapacity);
+    nodeMass = new Float64Array(treeCapacity);
+    nodeComX = new Float64Array(treeCapacity);
+    nodeComY = new Float64Array(treeCapacity);
+    nodeCount = new Int32Array(treeCapacity);
+    nodeBody = new Int32Array(treeCapacity);
+    nodeChildren = new Int32Array(treeCapacity * 4);
+}
+
 function allocNode(cx, cy, half) {
-    if (nodePoolSize >= MAX_NODES) return -1;
+    if (nodePoolSize >= treeCapacity) return -1;
     const id = nodePoolSize++;
     nodeCx[id] = cx;
     nodeCy[id] = cy;
@@ -54,7 +69,7 @@ function getQuadrant(nid, px, py) {
     }
 }
 
-function subdivide(nid) {
+function subdivide(nid, depth) {
     const hs = nodeHalf[nid] * 0.5;
     const cx = nodeCx[nid], cy = nodeCy[nid];
     const ci = nid * 4;
@@ -76,11 +91,19 @@ function subdivide(nid) {
     if (oldIdx >= 0) {
         nodeBody[nid] = -1;
         const q = getQuadrant(nid, x[oldIdx], y[oldIdx]);
-        insertBody(nodeChildren[ci + q], oldIdx);
+        insertBody(nodeChildren[ci + q], oldIdx, depth + 1);
     }
 }
 
-function insertBody(nid, idx) {
+function aggregateBody(nid, idx) {
+    const totalM = nodeMass[nid] + mass[idx];
+    nodeComX[nid] = (nodeComX[nid] * nodeMass[nid] + x[idx] * mass[idx]) / totalM;
+    nodeComY[nid] = (nodeComY[nid] * nodeMass[nid] + y[idx] * mass[idx]) / totalM;
+    nodeMass[nid] = totalM;
+    nodeCount[nid]++;
+}
+
+function insertBody(nid, idx, depth = 0) {
     if (nid === -1) return;
 
     if (nodeCount[nid] === 0) {
@@ -92,25 +115,32 @@ function insertBody(nid, idx) {
         return;
     }
 
+    // Coincident (or nearly coincident) particles otherwise create an
+    // unbounded subdivision chain. Treat the terminal leaf as one aggregate.
+    if (depth >= MAX_TREE_DEPTH || nodeHalf[nid] <= MIN_NODE_HALF) {
+        nodeBody[nid] = -1;
+        aggregateBody(nid, idx);
+        return;
+    }
+
     const ci = nid * 4;
     if (nodeChildren[ci] === -1) {
-        subdivide(nid);
+        subdivide(nid, depth);
     }
 
     if (nodeChildren[ci] !== -1) {
         const q = getQuadrant(nid, x[idx], y[idx]);
-        insertBody(nodeChildren[ci + q], idx);
+        insertBody(nodeChildren[ci + q], idx, depth + 1);
+    } else {
+        nodeBody[nid] = -1;
     }
 
-    const totalM = nodeMass[nid] + mass[idx];
-    nodeComX[nid] = (nodeComX[nid] * nodeMass[nid] + x[idx] * mass[idx]) / totalM;
-    nodeComY[nid] = (nodeComY[nid] * nodeMass[nid] + y[idx] * mass[idx]) / totalM;
-    nodeMass[nid] = totalM;
-    nodeCount[nid]++;
+    aggregateBody(nid, idx);
 }
 
 function buildTree() {
     nodePoolSize = 0;
+    ensureTreeCapacity(N);
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (let i = 0; i < N; i++) {
@@ -131,7 +161,9 @@ function buildTree() {
 }
 
 // ─── Force from tree (iterative stack for deep trees) ──────────
-const treeStack = new Int32Array(200);
+const treeStack = new Int32Array(MAX_TREE_DEPTH * 4 + 8);
+let forceX = 0;
+let forceY = 0;
 
 // Fast inverse square root proxy
 function fastInvSqrtR3(r2) {
@@ -140,7 +172,7 @@ function fastInvSqrtR3(r2) {
     return rInv * rInv * rInv;
 }
 
-function computeForceFromTree(root, bx, by) {
+function computeForceFromTree(root, bx, by, bodyIndex) {
     let fax = 0, fay = 0;
     let stackTop = 0;
     treeStack[stackTop++] = root;
@@ -160,15 +192,7 @@ function computeForceFromTree(root, bx, by) {
         const r2 = dx * dx + dy * dy + SOFTENING;
 
         if (nodeCount[nid] === 1) {
-            if (r2 < SOFTENING * 2) continue;
-            const r3Inv = fastInvSqrtR3(r2);
-            fax += G * nodeMass[nid] * dx * r3Inv;
-            fay += G * nodeMass[nid] * dy * r3Inv;
-            continue;
-        }
-
-        const s = nodeHalf[nid] * 2;
-        if (s * s < thetaSq * r2) {
+            if (nodeBody[nid] === bodyIndex) continue;
             const r3Inv = fastInvSqrtR3(r2);
             fax += G * nodeMass[nid] * dx * r3Inv;
             fay += G * nodeMass[nid] * dy * r3Inv;
@@ -176,13 +200,45 @@ function computeForceFromTree(root, bx, by) {
         }
 
         const ci = nid * 4;
+        const isTerminalAggregate = nodeChildren[ci] === -1;
+        const containsTarget = Math.abs(bx - nodeCx[nid]) <= nodeHalf[nid]
+            && Math.abs(by - nodeCy[nid]) <= nodeHalf[nid];
+
+        if (isTerminalAggregate) {
+            let aggregateMass = nodeMass[nid];
+            let aggregateX = nodeComX[nid];
+            let aggregateY = nodeComY[nid];
+            if (containsTarget) {
+                aggregateMass -= mass[bodyIndex];
+                if (aggregateMass <= 0) continue;
+                aggregateX = (nodeComX[nid] * nodeMass[nid] - bx * mass[bodyIndex]) / aggregateMass;
+                aggregateY = (nodeComY[nid] * nodeMass[nid] - by * mass[bodyIndex]) / aggregateMass;
+            }
+            const adx = aggregateX - bx;
+            const ady = aggregateY - by;
+            const ar2 = adx * adx + ady * ady + SOFTENING;
+            const ar3Inv = fastInvSqrtR3(ar2);
+            fax += G * aggregateMass * adx * ar3Inv;
+            fay += G * aggregateMass * ady * ar3Inv;
+            continue;
+        }
+
+        const s = nodeHalf[nid] * 2;
+        if (!containsTarget && s * s < thetaSq * r2) {
+            const r3Inv = fastInvSqrtR3(r2);
+            fax += G * nodeMass[nid] * dx * r3Inv;
+            fay += G * nodeMass[nid] * dy * r3Inv;
+            continue;
+        }
+
         for (let c = 0; c < 4; c++) {
             if (nodeChildren[ci + c] !== -1) {
                 treeStack[stackTop++] = nodeChildren[ci + c];
             }
         }
     }
-    return [fax, fay];
+    forceX = fax;
+    forceY = fay;
 }
 
 // ─── Force computation ──────────────────────────────────────────
@@ -210,9 +266,9 @@ function computeForcesDirect() {
 function computeForcesBarnesHut() {
     const root = buildTree();
     for (let i = 0; i < N; i++) {
-        const [fax, fay] = computeForceFromTree(root, x[i], y[i]);
-        ax[i] = fax;
-        ay[i] = fay;
+        computeForceFromTree(root, x[i], y[i], i);
+        ax[i] = forceX;
+        ay[i] = forceY;
     }
 }
 
@@ -240,7 +296,7 @@ function computeEnergy() {
         ke += 0.5 * mass[i] * (vx[i] * vx[i] + vy[i] * vy[i]);
     }
     // Skip O(N²) PE for large N — too expensive
-    if (N > 500) return ke;
+    if (N > 500) return null;
     for (let i = 0; i < N; i++) {
         for (let j = i + 1; j < N; j++) {
             const dx = x[j] - x[i];
@@ -267,6 +323,7 @@ self.onmessage = function (e) {
             ay = new Float64Array(N);
             mass = new Float64Array(msg.mass);
             simTime = 0;
+            ensureTreeCapacity(N);
             computeForces();
             const energy = computeEnergy();
             // Send back initial positions + energy
@@ -315,12 +372,14 @@ self.onmessage = function (e) {
             N = newN;
             computeForces();
             const energy = computeEnergy();
-            self.postMessage({ type: 'bodyAdded', n: N, energy: energy });
+            const posOut = new Float64Array(N * 2);
+            for (let i = 0; i < N; i++) { posOut[i * 2] = x[i]; posOut[i * 2 + 1] = y[i]; }
+            self.postMessage({ type: 'bodyAdded', n: N, energy: energy, data: posOut.buffer }, [posOut.buffer]);
             break;
         }
         case 'clear': {
             N = 0;
-            x = y = vx = vy = ax = ay = mass = null;
+            x = y = vx = vy = ax = ay = mass = new Float64Array(0);
             simTime = 0;
             self.postMessage({ type: 'cleared' });
             break;

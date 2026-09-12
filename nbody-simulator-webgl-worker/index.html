@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gravitational N-Body Simulator | Gunjan Lakhlani</title>
     <meta name="description"
-        content="Interactive gravitational N-body simulator — place bodies, set velocities, and watch gravity do its thing. Built with HTML5 Canvas.">
+        content="Interactive gravitational N-body laboratory with symplectic integration, Barnes–Hut gravity, a Web Worker, and WebGL rendering.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <style>
         /* ─── Reset & Base ─────────────────────────────────────── */
@@ -22,17 +22,17 @@
         }
 
         :root {
-            --bg-primary: #0a0a1a;
-            --bg-secondary: #0f0f24;
-            --bg-panel: #12122a;
-            --bg-hover: #1a1a3a;
-            --border: rgba(255, 255, 255, 0.06);
-            --border-active: rgba(120, 160, 255, 0.3);
-            --text-primary: #e8e8f0;
-            --text-secondary: #a0a0b8;
-            --text-muted: #606080;
-            --accent: #7c8aff;
-            --accent-glow: rgba(124, 138, 255, 0.15);
+            --bg-primary: #080a0f;
+            --bg-secondary: #0e121b;
+            --bg-panel: #141925;
+            --bg-hover: #1a2130;
+            --border: rgba(255, 255, 255, 0.11);
+            --border-active: rgba(130, 224, 207, 0.44);
+            --text-primary: #f4f6f8;
+            --text-secondary: #a9b0bd;
+            --text-muted: #747e90;
+            --accent: #82e0cf;
+            --accent-glow: rgba(76, 192, 177, 0.14);
             --red: #ff6b6b;
             --teal: #4ecdc4;
             --gold: #ffe66d;
@@ -43,8 +43,8 @@
             --green: #00b894;
             --radius: 8px;
             --radius-lg: 12px;
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
         }
 
         body {
@@ -55,12 +55,22 @@
             overflow: hidden;
         }
 
+        button, input { font: inherit; }
+
+        button:focus-visible,
+        input:focus-visible,
+        a:focus-visible,
+        canvas:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+
         /* ─── Layout ───────────────────────────────────────────── */
         .app {
             display: grid;
             grid-template-rows: auto 1fr;
-            grid-template-columns: 320px 1fr;
-            height: 100vh;
+            grid-template-columns: minmax(18rem, 20rem) 1fr;
+            height: 100dvh;
         }
 
         /* ─── Nav ──────────────────────────────────────────────── */
@@ -69,16 +79,18 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.75rem 1.5rem;
-            background: var(--bg-secondary);
+            min-height: 4.75rem;
+            padding: 0.75rem clamp(1rem, 3vw, 2rem);
+            background: rgba(8, 10, 15, 0.9);
             border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(16px);
         }
 
         .nav__brand {
             font-family: var(--font-mono);
-            font-weight: 600;
-            font-size: 0.85rem;
-            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-primary);
             text-decoration: none;
             letter-spacing: 0.03em;
             transition: color 0.2s;
@@ -90,11 +102,8 @@
 
         .nav__title {
             font-weight: 600;
-            font-size: 1rem;
-            background: linear-gradient(135deg, var(--accent), var(--teal));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
         }
 
         .nav__links {
@@ -125,12 +134,13 @@
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            scrollbar-color: var(--border-active) transparent;
         }
 
         .panel {
             background: var(--bg-panel);
             border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
+            border-radius: 14px;
             padding: 1rem;
         }
 
@@ -166,13 +176,14 @@
         .preset-btn:hover {
             border-color: var(--border-active);
             color: var(--text-primary);
-            background: rgba(124, 138, 255, 0.08);
+            background: rgba(130, 224, 207, 0.07);
         }
 
         .preset-btn.active {
             border-color: var(--accent);
             color: var(--accent);
             box-shadow: 0 0 12px var(--accent-glow);
+            background: rgba(130, 224, 207, 0.09);
         }
 
         .preset-btn .preset-icon {
@@ -227,6 +238,16 @@
             box-shadow: 0 0 8px var(--accent-glow);
         }
 
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border: 0;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
         /* ─── Action Buttons ───────────────────────────────────── */
         .actions {
             display: flex;
@@ -254,13 +275,13 @@
         }
 
         .btn--primary {
-            background: rgba(124, 138, 255, 0.15);
+            background: rgba(130, 224, 207, 0.12);
             border-color: var(--accent);
             color: var(--accent);
         }
 
         .btn--primary:hover {
-            background: rgba(124, 138, 255, 0.25);
+            background: rgba(130, 224, 207, 0.2);
         }
 
         .btn--danger {
@@ -340,6 +361,15 @@
             cursor: crosshair;
         }
 
+        #overlay-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
         .canvas-overlay {
             position: absolute;
             top: 1rem;
@@ -380,9 +410,21 @@
             .sidebar {
                 border-right: none;
                 border-bottom: 1px solid var(--border);
-                max-height: 40vh;
+                max-height: 44dvh;
                 overflow-y: auto;
+                padding: 0.75rem;
             }
+
+            .nav { min-height: 3.75rem; }
+            .nav__title { display: none; }
+            .presets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .actions { flex-wrap: wrap; }
+            .btn { flex: 1 1 calc(50% - 0.5rem); }
+            .canvas-hint { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
         }
     </style>
 </head>
@@ -392,12 +434,11 @@
     <div class="app">
         <!-- Nav -->
         <nav class="nav">
-            <a href="https://gunjanlakhlani.github.io" class="nav__brand">GL</a>
-            <span class="nav__title">Gravitational N-Body Simulator</span>
+            <a href="/" class="nav__brand">Gunjan Lakhlani</a>
+            <span class="nav__title">N-Body Gravity Lab</span>
             <div class="nav__links">
-                <a href="https://gunjanlakhlani.github.io/blog">Blog</a>
-                <a
-                    href="https://gunjanlakhlani.github.io/blog/2026/02/28/building-a-gravitational-nbody-solver/">About</a>
+                <a href="/blog">Writing</a>
+                <a href="/blog/2026/02/28/building-a-gravitational-nbody-solver/">How it works</a>
             </div>
         </nav>
 
@@ -457,22 +498,22 @@
                     <span class="control-label">Timestep</span>
                     <span class="control-value" id="dt-display">0.002</span>
                 </div>
-                <input type="range" id="dt-slider" min="-4" max="-1" step="0.1" value="-2.7">
+                <input type="range" id="dt-slider" min="-4" max="-1" step="0.1" value="-2.7" aria-label="Simulation timestep">
                 <div class="control-row" style="margin-top: 0.6rem;">
                     <span class="control-label">Body Mass</span>
                     <span class="control-value" id="mass-display">1.0</span>
                 </div>
-                <input type="range" id="mass-slider" min="-1" max="2" step="0.1" value="0">
+                <input type="range" id="mass-slider" min="-1" max="2" step="0.1" value="0" aria-label="Mass of a new body">
                 <div class="control-row" style="margin-top: 0.6rem;">
                     <span class="control-label">Trail Length</span>
                     <span class="control-value" id="trail-display">150</span>
                 </div>
-                <input type="range" id="trail-slider" min="0" max="500" step="10" value="150">
+                <input type="range" id="trail-slider" min="0" max="500" step="10" value="150" aria-label="Trail length">
                 <div class="control-row" style="margin-top: 0.6rem;">
                     <span class="control-label">Steps/Frame</span>
                     <span class="control-value" id="substep-display">4</span>
                 </div>
-                <input type="range" id="substep-slider" min="1" max="20" step="1" value="4">
+                <input type="range" id="substep-slider" min="1" max="20" step="1" value="4" aria-label="Physics steps per animation frame">
             </div>
 
             <!-- Actions -->
@@ -498,6 +539,10 @@
                     <span class="stat-value" id="stat-time">0.000</span>
                 </div>
                 <div class="stat-row">
+                    <span class="stat-label">Solver</span>
+                    <span class="stat-value" id="stat-solver">Direct</span>
+                </div>
+                <div class="stat-row">
                     <span class="stat-label">Energy (E)</span>
                     <span class="stat-value" id="stat-energy">—</span>
                 </div>
@@ -521,15 +566,16 @@
                     <p>Adjust mass slider before placing bodies</p>
                     <p><code>Scroll</code> to zoom in/out</p>
                     <p><code>Right-click + Drag</code> to pan the view</p>
+                    <p><code>Space</code> play/pause · <code>S</code> step · <code>R</code> reset view</p>
                 </div>
             </div>
         </aside>
 
         <!-- Canvas -->
         <div class="canvas-wrap">
-            <canvas id="gl-canvas"></canvas>
-            <canvas id="overlay-canvas"
-                style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+            <canvas id="gl-canvas" aria-hidden="true"></canvas>
+            <canvas id="overlay-canvas" tabindex="0" role="application"
+                aria-label="Interactive gravity simulation. Click and drag to add a body with velocity; use the mouse wheel to zoom and right-drag to pan."></canvas>
             <div class="canvas-overlay" id="canvas-overlay">t = 0.000</div>
             <div class="canvas-overlay" id="zoom-overlay" style="top: auto; bottom: 1rem; right: 1rem;">1.0×</div>
             <div class="canvas-hint" id="canvas-hint">Click anywhere to place a body — drag to set velocity
@@ -581,6 +627,8 @@ let currentFps = 0;
 
 // Energy stats
 let currentEnergy = 0;
+let baselinePending = false;
+let simulationError = '';
 
 const COLORS = [
     '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8e6cf',
@@ -610,7 +658,7 @@ let W, H, scale, offsetX, offsetY;
 // WebGL variables
 let shaderProgram, positionBuffer, colorBuffer, sizeBuffer;
 let aPosition, aColor, aSize;
-let uResolution, uOffset, uScale, uIsLargeN;
+let uResolution, uOffset, uScale, uIsLargeN, uPixelRatio;
 
 function initWebGL() {
     const vsSource = `
@@ -621,6 +669,7 @@ function initWebGL() {
                 uniform vec2 uOffset;
                 uniform float uScale;
                 uniform float uIsLargeN;
+                uniform float uPixelRatio;
                 varying vec3 vColor;
                 varying float vIsLargeN;
                 void main() {
@@ -628,7 +677,7 @@ function initWebGL() {
                     vec2 clipSpace = (screenPos / uResolution) * 2.0 - 1.0;
                     clipSpace.y = -clipSpace.y;
                     gl_Position = vec4(clipSpace, 0.0, 1.0);
-                    gl_PointSize = uIsLargeN > 0.5 ? 2.0 : aSize;
+                    gl_PointSize = (uIsLargeN > 0.5 ? 2.0 : aSize) * uPixelRatio;
                     vColor = aColor;
                     vIsLargeN = uIsLargeN;
                 }`;
@@ -661,10 +710,18 @@ function initWebGL() {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
 
+    if (!vertexShader || !fragmentShader) {
+        throw new Error('Unable to compile the WebGL shaders.');
+    }
+
     shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
     gl.linkProgram(shaderProgram);
+
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(shaderProgram) || 'Unable to link the WebGL program.');
+    }
 
     positionBuffer = gl.createBuffer();
     colorBuffer = gl.createBuffer();
@@ -678,6 +735,7 @@ function initWebGL() {
     uOffset = gl.getUniformLocation(shaderProgram, 'uOffset');
     uScale = gl.getUniformLocation(shaderProgram, 'uScale');
     uIsLargeN = gl.getUniformLocation(shaderProgram, 'uIsLargeN');
+    uPixelRatio = gl.getUniformLocation(shaderProgram, 'uPixelRatio');
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
@@ -729,6 +787,14 @@ resizeCanvas();
 const worker = new Worker('physics-worker.js');
 let workerBusy = false;
 
+worker.onerror = function () {
+    simulationError = 'Physics worker stopped';
+    running = false;
+    workerBusy = false;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.className = 'btn btn--primary';
+};
+
 worker.onmessage = function (e) {
     const msg = e.data;
     if (msg.type === 'positions') {
@@ -736,6 +802,11 @@ worker.onmessage = function (e) {
         positions = new Float64Array(msg.data);
         currentEnergy = msg.energy;
         simTime = msg.simTime;
+
+        if (baselinePending) {
+            E0 = Number.isFinite(currentEnergy) ? currentEnergy : null;
+            baselinePending = false;
+        }
 
         if (N < 500 && trailLength > 0) {
             for (let i = 0; i < N; i++) {
@@ -748,6 +819,8 @@ worker.onmessage = function (e) {
     } else if (msg.type === 'bodyAdded') {
         N = msg.n;
         currentEnergy = msg.energy;
+        if (msg.data) positions = new Float64Array(msg.data);
+        E0 = Number.isFinite(currentEnergy) ? currentEnergy : null;
         workerBusy = false;
     } else if (msg.type === 'cleared') {
         workerBusy = false;
@@ -764,6 +837,8 @@ function sendInitToWorker(bodies) {
     const cols = new Float32Array(N * 3);
     const sizes = new Float32Array(N);
     trails = []; masses = [];
+    baselinePending = true;
+    simulationError = '';
 
     for (let i = 0; i < N; i++) {
         const b = bodies[i];
@@ -812,10 +887,13 @@ function render() {
 
     if (N > 0 && positions.length >= N * 2) {
         gl.useProgram(shaderProgram);
-        gl.uniform2f(uResolution, glCanvas.width, glCanvas.height);
+        // Positions and camera values are in CSS pixels; using the backing-store
+        // dimensions here would shrink the scene on high-DPI displays.
+        gl.uniform2f(uResolution, W, H);
         gl.uniform2f(uOffset, offsetX, offsetY);
         gl.uniform1f(uScale, scale);
         gl.uniform1f(uIsLargeN, N > 500 ? 1.0 : 0.0);
+        gl.uniform1f(uPixelRatio, window.devicePixelRatio || 1);
 
         const posF32 = new Float32Array(positions);
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -907,16 +985,24 @@ function updateStats() {
     document.getElementById('stat-time').textContent = simTime.toFixed(3);
     document.getElementById('canvas-overlay').textContent = `t = ${simTime.toFixed(3)}`;
 
-    if (N >= 2 && currentEnergy !== undefined) {
+    document.getElementById('stat-solver').textContent = N > 200 ? 'Barnes–Hut' : 'Direct';
+
+    if (simulationError) {
+        document.getElementById('stat-energy').textContent = simulationError;
+        document.getElementById('stat-energy').className = 'stat-value bad';
+        document.getElementById('stat-derror').textContent = '—';
+    } else if (N >= 2 && Number.isFinite(currentEnergy)) {
         document.getElementById('stat-energy').textContent = currentEnergy.toExponential(4);
-        if (E0 !== null && E0 !== 0) {
+        document.getElementById('stat-energy').className = 'stat-value';
+        if (Number.isFinite(E0) && E0 !== 0) {
             const dE = Math.abs((currentEnergy - E0) / E0);
             const el = document.getElementById('stat-derror');
             el.textContent = dE.toExponential(2);
             el.className = 'stat-value ' + (dE < 1e-6 ? 'good' : dE < 1e-3 ? 'warn' : 'bad');
         }
     } else {
-        document.getElementById('stat-energy').textContent = '—';
+        document.getElementById('stat-energy').textContent = N > 500 ? 'not sampled' : '—';
+        document.getElementById('stat-energy').className = 'stat-value';
         document.getElementById('stat-derror').textContent = '—';
         document.getElementById('stat-derror').className = 'stat-value';
     }
@@ -1097,12 +1183,12 @@ btnPlay.addEventListener('click', () => {
     running = !running;
     btnPlay.textContent = running ? '⏸ Pause' : '▶ Play';
     btnPlay.className = running ? 'btn btn--danger' : 'btn btn--primary';
-    if (running && E0 === null && N >= 2 && currentEnergy !== undefined) E0 = currentEnergy;
+    if (running && E0 === null && N >= 2 && Number.isFinite(currentEnergy)) E0 = currentEnergy;
 });
 
 document.getElementById('btn-step').addEventListener('click', () => {
     if (N < 2 || workerBusy) return;
-    if (E0 === null && currentEnergy !== undefined) E0 = currentEnergy;
+    if (E0 === null && Number.isFinite(currentEnergy)) E0 = currentEnergy;
     workerBusy = true;
     worker.postMessage({ type: 'step', dt: dt, substeps: substeps });
 });
@@ -1114,11 +1200,25 @@ document.getElementById('btn-clear').addEventListener('click', () => {
     workerBusy = true;
     N = 0; positions = new Float64Array(0); colors = new Float32Array(0);
     masses = []; trails = [];
-    simTime = 0; E0 = null; currentEnergy = 0; colorIndex = 0;
+    simTime = 0; E0 = null; currentEnergy = null; colorIndex = 0;
+    baselinePending = false; simulationError = '';
     running = false;
     btnPlay.textContent = '▶ Play';
     btnPlay.className = 'btn btn--primary';
     document.getElementById('canvas-hint').style.opacity = '1';
+    presetBtns.forEach(button => button.classList.remove('active'));
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
+    if (event.code === 'Space') {
+        event.preventDefault();
+        btnPlay.click();
+    } else if (event.key.toLowerCase() === 's') {
+        document.getElementById('btn-step').click();
+    } else if (event.key.toLowerCase() === 'r') {
+        resetView();
+    }
 });
 
 // ─── Presets ──────────────────────────────────────────────────────
@@ -1139,7 +1239,7 @@ function loadPreset(name) {
     switch (name) {
         case 'twobody': {
             const d = 1.0, m = 1.0;
-            const v = Math.sqrt(G * m / (4.0 * d));
+            const v = Math.sqrt(G * m / (2.0 * d));
             tmpBodies.push({ x: -d / 2, y: 0, vx: 0, vy: v, mass: m, color: COLORS[0] });
             tmpBodies.push({ x: d / 2, y: 0, vx: 0, vy: -v, mass: m, color: COLORS[1] });
             break;
@@ -1330,7 +1430,7 @@ function loadPreset(name) {
         }
         case 'binary_star': {
             const m1 = 10, m2 = 10, d = 1.5;
-            const vOrb = Math.sqrt(G * m2 / (4 * d));
+            const vOrb = Math.sqrt(G * m2 / (2 * d));
             tmpBodies.push({ x: -d / 2, y: 0, vx: 0, vy: vOrb, mass: m1, color: '#ff6b6b' });
             tmpBodies.push({ x: d / 2, y: 0, vx: 0, vy: -vOrb, mass: m2, color: '#4ecdc4' });
 
@@ -1342,7 +1442,7 @@ function loadPreset(name) {
         case 'lagrange': {
             const m = 1.0;
             const R = 1.0;
-            const omega = Math.sqrt(3 * G * m / (R * R * R));
+            const omega = Math.sqrt(G * m / (Math.sqrt(3) * R * R * R));
             for (let k = 0; k < 3; k++) {
                 const angle = (2 * Math.PI * k) / 3;
                 const px = R * Math.cos(angle);
@@ -1362,12 +1462,6 @@ function loadPreset(name) {
     btnPlay.textContent = '⏸ Pause';
     btnPlay.className = 'btn btn--danger';
 
-    const checkE0 = setInterval(() => {
-        if (!workerBusy && currentEnergy !== undefined) {
-            E0 = currentEnergy;
-            clearInterval(checkE0);
-        }
-    }, 50);
 }
 
 function centerOfMassCorrection(bList) {
@@ -1385,6 +1479,9 @@ function centerOfMassCorrection(bList) {
 }
 
 // ─── Start ────────────────────────────────────────────────────────
+loadPreset('figure8');
+document.querySelector('[data-preset="figure8"]').classList.add('active');
+document.getElementById('canvas-hint').style.opacity = '0';
 requestAnimationFrame(loop);
 
     </script>
