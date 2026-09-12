@@ -1,12 +1,6 @@
-// =============================================
-// Base Styles & Reset
-// =============================================
-
 *,
 *::before,
 *::after {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
 }
 
@@ -18,117 +12,105 @@ html {
 }
 
 body {
-    font-family: $font-body;
-    font-size: $fs-base;
-    line-height: 1.6;
-    color: $text-primary;
-    background-color: $bg-primary;
+    margin: 0;
     min-height: 100vh;
     overflow-x: hidden;
-    position: relative;
-
-    // Subtle edge glow like the reference site
-    &::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 0;
-        box-shadow:
-            inset 0 0 120px $glow-color,
-            inset 0 0 300px rgba(60, 80, 255, 0.08);
-    }
-}
-
-a {
     color: $text-primary;
-    text-decoration: none;
-    transition: color $tr-fast;
-
-    &:hover {
-        color: $accent-light;
-    }
+    background:
+        radial-gradient(circle at 78% 5%, $glow-color 0, transparent 28rem),
+        $bg-primary;
+    font-family: $font-body;
+    font-size: $fs-base;
+    line-height: 1.7;
 }
 
-img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-}
+a { color: inherit; text-decoration: none; }
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+img, svg { display: block; max-width: 100%; }
+h1, h2, h3, h4, p, blockquote { margin-top: 0; }
 
 h1,
 h2,
 h3,
 h4 {
     color: $text-primary;
-    font-weight: $fw-bold;
-    line-height: 1.2;
+    font-family: $font-display;
+    font-weight: $fw-semibold;
+    line-height: 1.08;
 }
 
-p {
-    color: $text-secondary;
-    line-height: 1.7;
-    margin-bottom: $sp-lg;
-}
+p { color: $text-secondary; margin-bottom: $sp-lg; }
 
 code {
+    padding: 0.16em 0.42em;
+    border: 1px solid rgba($accent, 0.13);
+    border-radius: $radius-sm;
+    color: $accent-strong;
+    background: rgba($accent, 0.08);
     font-family: $font-mono;
     font-size: 0.88em;
-    background: rgba($accent, 0.12);
-    color: $accent-light;
-    padding: 0.15em 0.45em;
-    border-radius: $radius-sm;
 }
 
 pre {
-    background: $bg-secondary;
-    border: 1px solid $border-color;
-    border-radius: $radius-md;
+    margin: $sp-xl 0;
     padding: $sp-lg;
     overflow-x: auto;
-    margin-bottom: $sp-xl;
+    border: 1px solid $border-color;
+    border-radius: $radius-md;
+    background: $bg-secondary;
 
     code {
-        background: none;
-        color: $text-secondary;
         padding: 0;
+        border: 0;
+        color: $text-secondary;
+        background: none;
         font-size: $fs-sm;
         line-height: 1.7;
     }
 }
 
 blockquote {
-    border-left: 2px solid $accent;
-    padding: $sp-md $sp-lg;
     margin: $sp-xl 0;
+    padding: $sp-md $sp-lg;
+    border-left: 2px solid $accent;
 
-    p {
-        color: $text-secondary;
-        margin-bottom: 0;
-        font-style: italic;
-    }
+    p { margin: 0; color: $text-secondary; font-style: italic; }
 }
 
-hr {
-    border: none;
-    height: 1px;
-    background: $border-color;
-    margin: $sp-3xl 0;
-}
+hr { height: 1px; margin: $sp-3xl 0; border: 0; background: $border-color; }
 
 ul,
 ol {
-    padding-left: $sp-xl;
     margin-bottom: $sp-lg;
+    padding-left: $sp-xl;
     color: $text-secondary;
 
-    li {
-        margin-bottom: $sp-sm;
-        line-height: 1.7;
-    }
+    li { margin-bottom: $sp-sm; }
 }
 
-::selection {
-    background: rgba($accent, 0.35);
-    color: $text-primary;
+:focus-visible { outline: 2px solid $accent; outline-offset: 4px; }
+::selection { color: $bg-primary; background: $accent; }
+
+.skip-link {
+    position: fixed;
+    z-index: 1000;
+    top: $sp-md;
+    left: $sp-md;
+    padding: 0.65rem 0.9rem;
+    border-radius: $radius-sm;
+    color: $bg-primary;
+    background: $accent;
+    transform: translateY(-200%);
+
+    &:focus { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

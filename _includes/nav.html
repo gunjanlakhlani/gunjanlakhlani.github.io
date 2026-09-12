@@ -1,16 +1,15 @@
-<nav class="site-nav">
+<nav class="site-nav" aria-label="Main navigation">
   <div class="nav-container">
-    <a href="{{ '/' | relative_url }}" class="nav-logo">
-      <span class="logo-text">GL</span>
+    <a href="{{ '/' | relative_url }}" class="nav-logo" aria-label="Gunjan Lakhlani — home">
+      <span class="logo-mark">Gunjan Lakhlani</span>
     </a>
-    <button class="nav-toggle" aria-label="Toggle navigation" onclick="document.querySelector('.nav-links').classList.toggle('active')">
-      <span></span>
-      <span></span>
-      <span></span>
+    <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="nav-links">
+      <span></span><span></span><span></span>
     </button>
-    <ul class="nav-links">
+    <ul class="nav-links" id="nav-links">
       <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
-      <li><a href="{{ '/blog' | relative_url }}" class="{% if page.url contains '/blog' %}active{% endif %}">Blog</a></li>
+      <li><a href="{{ '/blog' | relative_url }}" class="{% if page.url contains '/blog' %}active{% endif %}">Writing</a></li>
+      <li><a href="{{ '/nbody-simulator-webgl-worker/' | relative_url }}">N-body lab</a></li>
     </ul>
   </div>
 </nav>

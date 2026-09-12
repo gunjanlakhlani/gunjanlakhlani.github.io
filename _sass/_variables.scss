@@ -1,43 +1,40 @@
-// =============================================
-// Design Tokens — Minimalist Dark Theme
-// =============================================
+// Design tokens — observatory notebook meets market terminal
+$bg-primary: #080a0f;
+$bg-secondary: #0e121b;
+$bg-elevated: #141925;
+$bg-card: rgba(255, 255, 255, 0.035);
+$bg-card-hover: rgba(255, 255, 255, 0.065);
 
-// Colors
-$bg-primary: #000000;
-$bg-secondary: #080810;
-$bg-card: rgba(255, 255, 255, 0.04);
-$bg-card-hover: rgba(255, 255, 255, 0.08);
+$text-primary: #f4f6f8;
+$text-secondary: #a9b0bd;
+$text-muted: #747e90;
 
-$text-primary: #ffffff;
-$text-secondary: #a0a0b0;
-$text-muted: #606070;
+$accent: #82e0cf;
+$accent-strong: #a7f3e5;
+$accent-light: $accent-strong;
+$accent-warm: #e6b77a;
+$glow-color: rgba(76, 192, 177, 0.14);
 
-$accent: #4466ff;
-$accent-light: #6688ff;
-$glow-color: rgba(60, 80, 255, 0.25);
+$border-color: rgba(255, 255, 255, 0.11);
+$border-hover: rgba(130, 224, 207, 0.44);
 
-$border-color: rgba(255, 255, 255, 0.12);
-$border-hover: rgba(255, 255, 255, 0.25);
-
-// Typography
-$font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-$font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+$font-body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-display: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
 
 $fs-xs: 0.75rem;
-$fs-sm: 0.85rem;
+$fs-sm: 0.875rem;
 $fs-base: 1rem;
 $fs-md: 1.125rem;
-$fs-lg: 1.35rem;
-$fs-xl: 1.75rem;
-$fs-2xl: 2.25rem;
-$fs-3xl: 3rem;
+$fs-lg: 1.375rem;
+$fs-xl: clamp(1.75rem, 3vw, 2.35rem);
+$fs-2xl: clamp(2.65rem, 7vw, 5.9rem);
 
 $fw-normal: 400;
 $fw-medium: 500;
 $fw-semibold: 600;
 $fw-bold: 700;
 
-// Spacing
 $sp-xs: 0.25rem;
 $sp-sm: 0.5rem;
 $sp-md: 1rem;
@@ -47,21 +44,18 @@ $sp-2xl: 3rem;
 $sp-3xl: 4rem;
 $sp-4xl: 6rem;
 
-// Layout
-$max-width: 680px;
-$nav-height: 64px;
+$max-width: 1180px;
+$reading-width: 720px;
+$nav-height: 76px;
 
-// Borders & Radius
-$radius-sm: 4px;
-$radius-md: 8px;
-$radius-lg: 12px;
+$radius-sm: 6px;
+$radius-md: 12px;
+$radius-lg: 22px;
 $radius-full: 9999px;
 
-// Transitions
-$tr-fast: 150ms ease;
-$tr-base: 250ms ease;
-$tr-slow: 400ms ease;
+$tr-fast: 160ms ease;
+$tr-base: 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
 
-// Breakpoints
-$bp-sm: 480px;
-$bp-md: 768px;
+$bp-sm: 560px;
+$bp-md: 820px;
+$bp-lg: 1040px;

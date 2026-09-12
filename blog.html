@@ -7,9 +7,11 @@ permalink: /blog/
 <section class="blog-page">
     <div class="container">
         <header class="blog-page__header">
-            <h1 class="blog-page__title">Blog</h1>
-            <p class="blog-page__description">Technical explorations, ideas, and the occasional deep dive into the
-                things that fascinate me.</p>
+            <div>
+                <p class="eyebrow">Essay archive</p>
+                <h1 class="blog-page__title">Writing</h1>
+            </div>
+            <p class="blog-page__description">Notes on physics, simulation, software, and the ideas that connect them.</p>
         </header>
 
         {% if site.posts.size > 0 %}
@@ -22,7 +24,7 @@ permalink: /blog/
                     {% assign reading_time = words | divided_by: 200 | plus: 1 %}
                     <span class="post-card__reading-time">{{ reading_time }} min read</span>
                 </div>
-                <h3 class="post-card__title">{{ post.title }}</h3>
+                <h2 class="post-card__title">{{ post.title }}</h2>
                 {% if post.excerpt %}
                 <p class="post-card__excerpt">{{ post.excerpt | strip_html | truncatewords: 40 }}</p>
                 {% endif %}
